@@ -9782,8 +9782,13 @@ const PROTO = {};
     }
     P.rot += TICK;
   }
-  /** the idle turntable: hold the front 2.6 s, then one full turn in 1.5 s */
-  function idleFrame() { const t = P.rot % 4.1; if (t < 2.6) return 0; return Math.min(11, Math.floor(easeIO((t - 2.6) / 1.5) * 12)) % 12; }
+  /** the idle turntable: hold the front 2.6 s, then one full turn in 1.5 s — the pile, the shop, and (round 14, Alex: "if i finish
+   *  a figure it should rotate similar to when i can preview in the pile") the finished piece, a piece looked at on the display
+   *  shelf and the counter's chosen piece. turnAt(t): the frame at t s on that clock; a clock set to TURN_SOON is 0.2 s into a turn
+   *  (its slow start, where no frame changes yet): the next view shows 0.1 s later — a piece you just chose turns at once */
+  const IDLE_HOLD = 2.6, IDLE_TURN = 1.5, TURN_SOON = IDLE_HOLD + 0.2;
+  function turnAt(t) { const u = t % (IDLE_HOLD + IDLE_TURN); if (u < IDLE_HOLD) return 0; return Math.min(11, Math.floor(easeIO((u - IDLE_HOLD) / IDLE_TURN) * 12)) % 12; }
+  function idleFrame() { return turnAt(P.rot); }
 
   // ---- THE SUPPLY SHELF: a tab per theme (the ones the shop level has brought), its ten figures — each on its own — and its
   //      pack of 5 (random by rarity; the cards flip in their rarity's colour). P.shopSel = a figure (its FIGS index), -1 = the pack
@@ -10159,13 +10164,15 @@ const PROTO = {};
     pop(word || (s >= 1 ? T('PERFECT') : s >= 0.6 ? T('GOOD') : T('WOBBLE')), x, y - 10, s >= 1 ? C.Y7 : s >= 0.6 ? C.CRM2 : C.CRM0);
     burst(x, y, s >= 1 ? 9 : 4, s >= 1 ? C.LIT3 : C.CRM1);
   }
-  function makeTwinkles(J) {   // starlight paint twinkles where it catches the lamp
-    J.twk = [];
-    if (!J.starZones) return;
-    const L = J.L, c = [];
-    for (let i = 0; i < J.n; i++) { const z = L.zone[i]; if (!((z === Z.CLOAK && J.starZones & 1) || (z === Z.TRIM && J.starZones & 2))) continue; const v = L.spec[i] / 255 + (L.curv[i] - 128) / 256 + L.light[i] / 400; if (v > 0.55) c.push([i, v]); }
+  function makeTwinkles(J) { J.twk = twinkleSpots(J.L, J.starZones); }   // starlight paint twinkles where it catches the lamp
+  /** where starlight paint (sz: 1 the cloak, 2 the trim) catches the lamp in a view (round 14: any view, for the close look) */
+  function twinkleSpots(L, sz) {
+    const out = []; if (!sz) return out;
+    const c = [];
+    for (let i = 0; i < L.w * L.h; i++) { const z = L.zone[i]; if (!((z === Z.CLOAK && sz & 1) || (z === Z.TRIM && sz & 2))) continue; const v = L.spec[i] / 255 + (L.curv[i] - 128) / 256 + L.light[i] / 400; if (v > 0.55) c.push([i, v]); }
     c.sort((a, b) => b[1] - a[1]);
-    for (let k = 0; k < c.length && J.twk.length < 36; k += 3) J.twk.push({ i: c[k][0], ph: hash(c[k][0]) * 40 });
+    for (let k = 0; k < c.length && out.length < 36; k += 3) out.push({ i: c[k][0], ph: hash(c[k][0]) * 40 });
+    return out;
   }
 
   // ---- EYES (rare +): dot the pupil in the middle of the eye, then the catchlight at its top. AIM — the dot lands where you
@@ -10257,6 +10264,11 @@ const PROTO = {};
    *  it at the counter: SHOP.ensure) */
   function commit(J) {
     const piece = { fig: J.fig.id, c: J.ch.map((x) => ({ h: x.h, f: x.f })), base: J.base, q: +J.q.toFixed(3), v: J.value, g: J.grade.name, lvl: SHOP.lvl(), b: J.boost || null };
+    // round 14: what the display shelf's close look shows as you painted it — the eyes dotted, the ember's reach (a figure with
+    // those steps keeps the key, empty or 0 when there was nothing: a piece from before keeps none), weak highlights (mode 5)
+    if (J.fig.eyes) piece.ey = eyeDots(J) || [];
+    if (J.fig.glow) piece.gw = J.gw && J.gw.r > 0 ? J.gw.r : 0;
+    if (mean(J.gs) < 0.5) piece.w = 1;
     const first = !G.S.col[J.fig.id], xp = J.auto ? 0 : SHOP.xpPaint(J.fi, J.grade.name, first);   // (auto paint: no painting XP)
     if (!J.auto) SHOP.recordSkill(J.q);
     for (const c of J.ch) if (c.pot) spendPot(c.h, c.f);   // the pots this piece took: used up (M4)
@@ -10273,19 +10285,33 @@ const PROTO = {};
     G.save();
   }
   /** the turntable views carry the eye dots (the same offsets, on every eye a view shows) and the ember glow (round that view's maw) */
-  function finishView(J, cv, L) {
+  function finishView(J, cv, L) { return dottedView(cv, L, eyeDots(J), J.gw && J.gw.r > 0 ? J.gw.r : 0, J.fig.glow && J.fig.glow.ramp); }
+  /** round 14: the painted eyes as data a piece keeps (piece.ey) — per painted eye, left to right: its size and its dots
+   *  [dx, dy from the eye's middle, 1 = the catchlight] — so the display shelf's close look shows them as the reveal did */
+  function eyeDots(J) {
+    const done = J.dots ? J.dots.filter((q) => q.at >= 0) : []; if (!done.length) return null;
+    const r3 = (v) => Math.round(v * 1000) / 1000;
+    return [...new Set(done.map((q) => q.eye))].sort((a, b) => a.x - b.x)
+      .map((e) => ({ n: e.px.length, d: done.filter((q) => q.eye === e).map((q) => [r3((q.at % J.L.w) - e.x), r3(((q.at / J.L.w) | 0) - e.y), q.kind === 'glint' ? 1 : 0]) }));
+  }
+  /** a view with its painted eyes (ey: eyeDots) and the ember's fire in its maw (gr: the glow's reach, 0 = none) */
+  function dottedView(cv, L, ey, gr, ramp) {
     const x = { eyes: null, maw: null };
-    if (J.gw && J.gw.r > 0) { const m = mawOf(L); x.maw = m; if (m) { const b = oslBands(L, m.x, m.y, J.gw.r, new Uint8Array(L.w * L.h)); for (let i = 0; i < b.length; i++) if (b[i] && cv.d[i] !== TRANSPARENT) cv.d[i] = oslColour(cv.d[i], b[i], J.fig.glow.ramp); } }
-    if (J.dots && J.dots.some((q) => q.at >= 0)) {   // each eye of this view gets the dots of its painted twin (left to left, right to right)
-      x.eyes = eyesOf(L); const painted = [...new Set(J.dots.filter((q) => q.at >= 0).map((q) => q.eye))].sort((a, b) => a.x - b.x), ve = x.eyes.slice().sort((a, b) => a.x - b.x);
-      const biggest = painted.reduce((a, b) => (b.px.length > a.px.length ? b : a), painted[0]);
-      ve.forEach((e, k) => { const src = painted.length === ve.length ? painted[k] : biggest; for (const q of J.dots) {
-        if (q.at < 0 || q.eye !== src) continue;
-        const ox = (q.at % J.L.w) - q.eye.x, oy = ((q.at / J.L.w) | 0) - q.eye.y;
-        dotOn(cv.d, L, q.kind, nearestPx(L, e.px, e.x + ox, e.y + oy));
-      } });
+    if (gr > 0) { const m = mawOf(L); x.maw = m; if (m) { const b = oslBands(L, m.x, m.y, gr, new Uint8Array(L.w * L.h)); for (let i = 0; i < b.length; i++) if (b[i] && cv.d[i] !== TRANSPARENT) cv.d[i] = oslColour(cv.d[i], b[i], ramp); } }
+    if (ey && ey.length) {   // each eye of this view gets the dots of its painted twin (left to left, right to right)
+      x.eyes = eyesOf(L); const ve = x.eyes.slice().sort((a, b) => a.x - b.x), biggest = ey.reduce((a, b) => (b.n > a.n ? b : a), ey[0]);
+      ve.forEach((e, k) => { const src = ey.length === ve.length ? ey[k] : biggest; for (const [ox, oy, g] of src.d) dotOn(cv.d, L, g ? 'glint' : 'pupil', nearestPx(L, e.px, e.x + ox, e.y + oy)); });
     }
     return x;
+  }
+  /** a piece's eyes: the ones it keeps; one painted before round 14 that had an EYES step gets them as a perfect hand would
+   *  dot them (the pupil in the middle, the catchlight top left) */
+  function pieceDots(p, f, L0) {
+    if ('ey' in p) return Array.isArray(p.ey) && p.ey.length ? p.ey : null;
+    if (!f.eyes) return null;
+    const ey = eyesOf(L0).sort((a, b) => a.x - b.x).map((e) => { const pu = nearestPx(L0, e.px, e.x, e.y), gl = catchPx(L0, e), at = (i) => [(i % L0.w) - e.x, ((i / L0.w) | 0) - e.y];
+      return { n: e.px.length, d: [at(pu).concat(0), at(gl).concat(1)] }; });
+    return ey.length ? ey : null;
   }
   const SPIN = 1.5, STAMP = 1.75, TAG = 2.35, BTNS_AT = 2.8;
   function turnFrame(t) { if (t >= SPIN) return 0; return Math.floor(easeIO(clamp(t / SPIN, 0, 1)) * 12) % 12; }
@@ -10298,7 +10324,7 @@ const PROTO = {};
     }
     if (t >= TAG && t - TICK < TAG) sfx('coin');
     if (t >= BTNS_AT) {
-      P.focus = 0; go('after');
+      P.focus = 0; P.rot = BTNS_AT - SPIN; go('after');   // (round 14: it keeps turning — the next turn 2.6 s after the reveal's own one ended)
       if (J.rooms && J.rooms.length) {   // M5: this Masterwork completed a theme's ten: its room theme is yours
         const nms = J.rooms.map((k) => T(ROOMS.THEMES[k].name)); sfx('legendary_chime'); ENGINE.shake(3, 10); PFX.burst(PK.CONFETTI, 160, 30, 50, 1.8, 140, -1, 1, VB - 2, 1);
         say(nms.length > 1 ? TF('ROOM THEMES UNLOCKED: {names}! Switch them on in the room (its title, top)', { names: nms.join(', ') }) : TF('ROOM THEME UNLOCKED: the {name}! Switch it on in the room (its title, top)', { name: nms[0] }));
@@ -10315,6 +10341,7 @@ const PROTO = {};
       { count: SHOP.listSlots(), min: m, track: T(SHOP.trackOf('web').name) });   // (the WEBSHOP track's own name)
   }
   function updAfter() {
+    P.rot += TICK;
     const b = hitBtn(), nb = webOpen() ? 3 : 2;
     if (IN.pressed('left')) { P.focus = Math.max(0, P.focus - 1); sfx('ui_move'); } if (IN.pressed('right')) { P.focus = Math.min(nb - 1, P.focus + 1); sfx('ui_move'); }
     if (b === 'counter' || (IN.pressed('confirm') && P.focus === 0)) return finish('counter');
@@ -10333,6 +10360,7 @@ const PROTO = {};
   }
   /** the piece is done: it waits at the COUNTER to be sold, goes onto the DISPLAY SHELF (if a spot is free) or up for AUCTION */
   function finish(how) {
+    P.outK = P.phase === 'after' ? idleFrame() : 0;   // (round 14: chosen mid-turn, it fades out as it stands)
     const J = P.J, piece = J.piece || G.S.pending; if (!piece) { go('out'); P.out = { t: 0 }; return; }
     delete G.S.pending;
     if (how === 'list' && G.S.list.length < SHOP.listSlots() && webOpen()) listPiece(null, piece);
@@ -10384,6 +10412,8 @@ const PROTO = {};
   }
   function updSell() {
     P.dis = Math.min(1, P.dis + TICK * 3); P.cuIn = Math.min(1, P.cuIn + TICK * 3.5);
+    { const n0 = Math.min(slotsN(), G.S.stock.length), tp = P.sellSel >= 0 && P.sellSel < n0 ? G.S.stock[P.sellSel] : null;   // round 14: the chosen piece turns
+      if (tp !== P.turnP) { P.turnP = tp; P.sellRot = TURN_SOON; } else P.sellRot += TICK; }
     const b = hitBtn(), list = G.S.stock, n = Math.min(slotsN(), list.length), cu = custNow();
     if (b === 'sign' || IN.keyPressed('KeyO')) { flipSign(); return; }
     if (P.react) {   // the customer answers; after a sale, a second no or a goodbye they leave, and the next one steps up
@@ -10770,32 +10800,201 @@ const PROTO = {};
   //      piece: to the counter, or up for auction
   const CASE_Y = [49, 105, 157], CASE_X = [96, 128, 160, 192, 224];   // the shelf tops and the slots in room_cabinet
   const caseSlot = (k) => [CASE_X[k % 5], CASE_Y[(k / 5) | 0]];
-  function enterCase() { P.caseSel = -1; P.dis = 0; go('display'); }
+  function enterCase() { P.caseSel = -1; P.dis = 0; P.zoom = null; go('display'); }
   function updCase() {
     P.dis = Math.min(1, P.dis + TICK * 3);
     const b = hitBtn(), list = G.S.kept;
+    if (P.zoom) { updZoom(b); return; }
     if (IN.pressed('cancel') || b === 'room') { toRoom(); return; }
-    if (b === 'bench') { toStation('bench'); return; }
-    if (b && b.startsWith('pc')) { const k = +b.slice(2); P.caseSel = P.caseSel === k ? -1 : k; sfx('ui_move'); }
-    if (list.length && (IN.pressed('left') || IN.pressed('right'))) { P.caseSel = clamp((P.caseSel < 0 ? 0 : P.caseSel + (IN.pressed('left') ? -1 : 1)), 0, list.length - 1); sfx('ui_move'); }
-    if (P.caseSel >= 0 && P.caseSel < list.length && b === 'list') { if (listPiece('kept', P.caseSel)) { P.caseSel = -1; R.shelf.forEach((q) => { if (q) q.fade = 1; }); } return; }
-    if (P.caseSel >= 0 && P.caseSel < list.length && (b === 'tocounter' || IN.pressed('confirm'))) {
-      G.S.stock.push(list.splice(P.caseSel, 1)[0]); buildShelf(); R.shelf.forEach((q) => { if (q) q.fade = 1; });
-      sfx('coin'); say(G.S.stock.length > SHOP.counterSlots() ? T('The counter is full: it waits in the back room') : T('At the counter, ready to sell')); P.caseSel = -1; G.save();
+    const calm = TIME - (P.zoomShut || -9) > 0.35;   // (the taps that put one back, or sent the last one to the counter, are no taps on what is under them)
+    if (b === 'bench') { if (calm) toStation('bench'); return; }
+    if (b && b.startsWith('pc')) { if (calm) openZoom(+b.slice(2), [IN.mx, IN.my]); return; }
+    if (list.length && (IN.pressed('left') || IN.pressed('right'))) openZoom(0);
+  }
+  // ---- round 14 (Alex: "select a figure from my display and then it zooms in and is in the same size as workbench and does the
+  //      rotation so that i can see it bigger"): THE CLOSE LOOK. A tap on a piece takes it off the shelf and up to the
+  //      workbench's size and place (ZOOM_IN s), onto the supply shelf's plinth in its rarity's light, the shelf dimmed behind;
+  //      it turns as the pile does (the first turn once it is there). ◀ ▶ (or the arrow keys) the next piece on the shelf; a tap
+  //      on it turns it now; a tap anywhere else, Esc or the band's ◀ puts it back (ZOOM_OUT s). The bottom band: its name,
+  //      worth and boost, COUNTER and AUCTION (deaf for its first 0.35 s: a second tap of the one that opened it is neither)
+  const ZOOM_IN = 0.3, ZOOM_OUT = 0.22, ZOOM_ARM = 0.35;
+  function openZoom(k, at) {
+    const list = G.S.kept; if (k < 0 || k >= Math.min(list.length, CASE_SLOTS)) return;
+    P.caseSel = k; P.zoom = { p: list[k], t: 0, out: -1, rot: IDLE_HOLD - ZOOM_IN - 0.25, sw: -9, from: caseSlot(k), at: at || null };   // (at: where the tap that opened it landed)
+    sfx('ui_select');
+  }
+  /** how far up it is: 0 on its spot on the shelf .. 1 at the bench's size (going back: from where it was) */
+  function zoomE(Zm) { return Zm.out >= 0 ? Zm.e0 * (1 - EASE.outCubic(clamp((Zm.t - Zm.out) / ZOOM_OUT, 0, 1))) : EASE.outCubic(clamp(Zm.t / ZOOM_IN, 0, 1)); }
+  /** back onto the shelf from where it is and as it stands (the review: a close mid-turn snapped it to its front, Esc while it came
+   *  up flashed it full size) */
+  function closeZoom() {
+    const Zm = P.zoom; if (!Zm || Zm.out >= 0) return;
+    Zm.e0 = zoomE(Zm); Zm.k = Zm.t >= ZOOM_IN ? turnAt(Zm.rot) : 0; Zm.out = Zm.t; Zm.from = caseSlot(Math.max(0, P.caseSel)); sfx('ui_back', { vol: 0.6 });
+  }
+  /** gone from the close look by COUNTER or AUCTION: the shelf is back, its taps (and WORKBENCH, if the shelf is now empty) deaf
+   *  for a moment — the second tap of a double tap lands there (the review) */
+  function leaveZoom() { P.zoom = null; P.caseSel = -1; P.zoomShut = TIME; R.shelf.forEach((q) => { if (q) q.fade = 1; }); }
+  function updZoom(b) {
+    const Zm = P.zoom, list = G.S.kept, k = list.indexOf(Zm.p);
+    Zm.t += TICK; Zm.rot += TICK;
+    if (Zm.out >= 0 || k < 0) { if (k < 0 || Zm.t - Zm.out >= ZOOM_OUT) { P.zoom = null; P.caseSel = -1; P.zoomShut = TIME; } return; }   // putting it back
+    P.caseSel = k;
+    const up = Zm.t >= ZOOM_IN, armed = Zm.t >= ZOOM_ARM;
+    if (up) { const TV = pieceTurn(Zm.p); if (TV) TV.warm(); }   // (its other views, one a tick, while it stands before its first turn)
+    if (IN.pressed('cancel') || b === 'room') { closeZoom(); return; }
+    const n = Math.min(list.length, CASE_SLOTS), d = b === 'zl' || IN.pressed('left') ? -1 : b === 'zr' || IN.pressed('right') ? 1 : 0;
+    if (d) { if (n > 1 && up) { P.caseSel = (k + d + n) % n; Zm.p = list[P.caseSel]; Zm.rot = IDLE_HOLD - 0.6; Zm.sw = Zm.t; sfx('ui_move'); } return; }   // (its front first, then a turn; not while one comes up)
+    if (b === 'zfig') { if (turnAt(Zm.rot) === 0) Zm.rot = TURN_SOON; return; }   // a tap on it: it turns now
+    // the tap that opened it, again on the same spot (a piece on the bottom shelf: COUNTER or AUCTION is under it now) is a tap
+    // beside the piece, not a choice — an auction can't be taken back (the review)
+    const again = Zm.at && Zm.t < 1.5 && Math.abs(IN.mx - Zm.at[0]) <= 10 && Math.abs(IN.my - Zm.at[1]) <= 10;
+    if ((b === 'list' || b === 'tocounter') && again) { if (armed) closeZoom(); return; }
+    if (b === 'list') { if (armed && listPiece('kept', k)) leaveZoom(); return; }
+    if (b === 'tocounter' || IN.pressed('confirm')) {
+      if (!armed) return;
+      G.S.stock.push(list.splice(k, 1)[0]); buildShelf();
+      sfx('coin'); say(G.S.stock.length > SHOP.counterSlots() ? T('The counter is full: it waits in the back room') : T('At the counter, ready to sell')); leaveZoom(); G.save();
+      return;
     }
+    // a tap anywhere else — the frame or the dimmed strips beyond it on a phone — puts it back on the shelf (not in its first
+    // ZOOM_ARM s: a double tap only opens it)
+    if (IN.click || IN.offTap) { IN.click = false; IN.offTap = false; if (armed) closeZoom(); }
+  }
+  /** a canvas scaled by sc (nearest pixel), its point (ax, ay) on frame point (sx, sy), inside the image area */
+  function blitZoomed(cv, ax, ay, sx, sy, sc) {
+    const x0 = Math.max(0, Math.floor(sx - ax * sc)), x1 = Math.min(W, Math.ceil(sx + (cv.w - ax) * sc)), y0 = Math.max(VT, Math.floor(sy - ay * sc)), y1 = Math.min(VB, Math.ceil(sy + (cv.h - ay) * sc));
+    for (let y = y0; y < y1; y++) { const cy = Math.floor(ay + (y + 0.5 - sy) / sc); if (cy < 0 || cy >= cv.h) continue;
+      for (let x = x0; x < x1; x++) { const cx = Math.floor(ax + (x + 0.5 - sx) / sc); if (cx < 0 || cx >= cv.w) continue; const c = cv.d[cy * cv.w + cx]; if (c !== TRANSPARENT) FB[y * W + x] = c; } }
+  }
+  /** the close look: the dimmed shelf, the plinth, the piece (on its way: its front view scaled between its spot and the stage) */
+  function drawZoom() {
+    const Zm = P.zoom, p = Zm.p, f = FIGS[figIdx(p.fig)];
+    const e = zoomE(Zm), dk = Math.round(e * 3);
+    if (dk > 0) remapRect(0, VT, W, VB - VT, DARK[dk]);
+    const TV = f && HD.theme.need(f.s) ? pieceTurn(p) : null, v = TV && TV.view(e < 1 ? (Zm.out >= 0 ? Zm.k | 0 : 0) : turnAt(Zm.rot));
+    if (!v) { if (e >= 1) themeWait(0, VT, W, VB - VT); return; }
+    // the plinth rises from the screen's bottom edge (its foot under the bottom band, down the strip below the frame on an iPad,
+    // all the way: the review saw it pop in there when it stopped); its rarity's light comes on once the piece is up
+    const PLy = HD.layer('plinth').y0, rise = (BLEED.on ? BLEED.FH - BLEED.OY : H) - PLy;
+    plinth(0, f.rar, Zm.out >= 0 ? 0 : clamp((Zm.t - ZOOM_IN) / 0.25, 0, 1), Math.round((1 - e) * rise));
+    if (e < 1) {   // on its way up (or back, as it stood)
+      const mini = looks(p, 'mini').L, s0 = clamp(mini.h / v.L.h, 0.1, 1), [fx, fy] = Zm.from;
+      blitZoomed(v.cv, SHRINK.ax - v.L.x0, v.L.h, fx + (SHRINK.ax - fx) * e, fy + 2 + (v.L.y0 + v.L.h - fy - 2) * e, s0 + (1 - s0) * e);
+      return;
+    }
+    const sw = clamp((Zm.t - Zm.sw) / 0.15, 0, 1), x0 = v.L.x0, y0 = v.L.y0;
+    if (sw < 1) dissolveBlit(v.cv, x0, y0, sw);   // (the next piece fades in; its halo, glows, ember and twinkles once it is whole — the review)
+    else {
+      if (TV.halo) HD.halo(160, 27, 10);
+      blit(v.cv, x0, y0); HD.drawGlows(v.gl, x0, y0); if (v.eyes) keepEyes(v.cv, v.L, v.eyes); if (v.maw) emberBloom(v.L, x0 + v.maw.x, y0 + v.maw.y, TV.gr);
+      twinkleAt(v.twk, v.L, x0, y0);
+    }
+    P.btns.push({ id: 'zfig', x: x0, y: y0, w: v.L.w, h: v.L.h, on: true });
+    if (Math.min(G.S.kept.length, CASE_SLOTS) > 1) { btn('zl', '◀', 52, 82, 22, 15); btn('zr', '▶', W - 74, 82, 22, 15); }
+    // its grade and its paints (top right, clear of every figure: the turntables stay left of x 230)
+    const g = GRADES.find((q) => q.name === p.g) || GRADES[1];
+    textO(T(g.name), W - 6, VT + 5, C[g.col], C.UI0, FONT_M, 1, 2);
+    textO(paintName(p.c[0].h, p.c[0].f), W - 6, VT + 15, C.CRM1, C.UI0, FONT_S, 1, 2);
+    textO(paintName(p.c[1].h, p.c[1].f), W - 6, VT + 22, C.CRM1, C.UI0, FONT_S, 1, 2);
+    textO(T(BASES[clamp(p.base | 0, 0, BASES.length - 1)].name), W - 6, VT + 29, C.CRM0, C.UI0, FONT_S, 1, 2);
   }
   /** a finished piece as a small painted figure (the display case) or a portrait (the counter): its own paints, cached */
   const LOOKS = new WeakMap();
+  const lookEntry = (p) => { let e = LOOKS.get(p); if (!e) { e = {}; LOOKS.set(p, e); } return e; };
+  /** a piece's look: its paints over its figure's own materials */
+  function pieceLook(p) {
+    const bp = basePaints(p.base || 0);
+    return figLook(figIdx(p.fig), { [Z.CLOAK]: paintOf(p.c[0].h, p.c[0].f), [Z.TRIM]: paintOf(p.c[1].h, p.c[1].f), [Z.BASETOP]: bp[0], [Z.STONE]: bp[1] });
+  }
   function looks(p, kind) {
-    let e = LOOKS.get(p); if (!e) { e = {}; LOOKS.set(p, e); }
+    const e = lookEntry(p);
     if (!e[kind]) {
-      const L = HD.layer(kind === 'card' ? 'card_' + p.fig : `mini_${p.fig}_1`), bp = basePaints(p.base || 0);
-      const paints = { [Z.CLOAK]: paintOf(p.c[0].h, p.c[0].f), [Z.TRIM]: paintOf(p.c[1].h, p.c[1].f), [Z.BASETOP]: bp[0], [Z.STONE]: bp[1] };
-      const v = { L, cv: HD.outline(HD.mapLayer(L, figLook(figIdx(p.fig), paints)), HD.outlinePairs(L)) };
+      const L = HD.layer(kind === 'card' ? 'card_' + p.fig : `mini_${p.fig}_1`);
+      const v = { L, cv: HD.outline(HD.mapLayer(L, pieceLook(p)), HD.outlinePairs(L)) };
       if (L.pending) return v;   // (M3: its theme is still on its way: never keep the placeholder — the next frame asks again)
       e[kind] = v;
     }
     return e[kind];
+  }
+  /** round 14: a piece's turntable at the workbench's size (the display shelf's close look) — the reveal's views, from what the
+   *  piece keeps: its paints, its eyes, its ember, weak highlights' look; starlight twinkles and the halo as they were. null while
+   *  its theme is on its way. { view(k): view k (made when first asked for: a first look costs one view, not twelve — the review
+   *  measured a twelve-view build swallowing the zoom on a fast Mac), warm(): the next missing one (true when all are made), gr:
+   *  the ember's reach, halo } */
+  function pieceTurn(p) {
+    const e = lookEntry(p); if (e.turn) return e.turn;
+    const fi = figIdx(p.fig); if (fi < 0) return null;
+    const f = FIGS[fi], L0 = HD.layer(f.id + '_t0'); if (L0.pending) return null;
+    const ey = pieceDots(p, f, L0), gr = 'gw' in p ? +p.gw || 0 : f.glow ? GLOW_R : 0, sz = (p.c[0].f >= 4 ? 1 : 0) | (p.c[1].f >= 4 ? 2 : 0);   // (from before round 14: a perfect ember)
+    const look = pieceLook(p), mode = p.w ? 5 : 4, V = [];
+    const TV = { V, gr, halo: !!f.halo && sz > 0,
+      view(k) {   // (as viewsOf makes the reveal's: the eyes and the ember on the mapped view, then its outline)
+        if (!V[k]) { const L = HD.layer(`${f.id}_t${k}`); if (L.pending) return null; const cv = HD.mapLayer(L, look, null, mode), x = dottedView(cv, L, ey, gr, f.glow && f.glow.ramp);
+          V[k] = Object.assign({ L, cv: HD.outline(cv, HD.outlinePairs(L)), gl: glowsFor(f, L), twk: twinkleSpots(L, sz) }, x); }
+        return V[k];
+      },
+      warm() { for (let k = 0; k < 12; k++) if (!V[k]) { TV.view(k); return false; } return true; } };
+    return (e.turn = TV);
+  }
+
+  // ---- round 14 (Alex: "make it rotate (in the same current size as is) on the counter if i select it"): the counter's chosen
+  //      piece turns at its own size. Its card (card_<fig>, tools/bake3d/models/card.mjs) is the figure CARD_K times smaller in
+  //      the bench's own camera, so the bench's turntable, shrunk, is that card turning — made here: nothing more is baked or
+  //      downloaded. Perspective, along the figure's axis: a point h mm up it lands on frame row Y(h), Z(h) mm from the eye (the
+  //      bench camera, tools/bake3d/world.mjs; tools/proto_play.mjs checks these numbers against it); a row of the small figure,
+  //      h' up, takes the big one's row at h = h' / CARD_K, its columns spread by Z(h') / (CARD_K x Z(h)). Each small pixel:
+  //      4 x 4 samples of the big frame — the zone most of them land on (none when under half are on the figure), its planes
+  //      averaged over that zone's samples, an internal line where 30% of them are on one. Against a real small bake (4 figures,
+  //      12 turns each) the same silhouette to 2 px, 96% of it the same pixels.
+  const CARD_K = 0.42, BENCH_CAM = { pos: [0, 58.64344128207791, 130.56558868122153], target: [0, 28.5, 0], fov: 25, w: 320, h: 180, foot: 13.6 };
+  const SHRINK = (() => {
+    const B = BENCH_CAM, [px, py, pz] = B.pos, [tx, ty, tz] = B.target; let f = [tx - px, ty - py, tz - pz]; const fl = Math.hypot(f[0], f[1], f[2]); f = f.map((v) => v / fl);
+    let r = [-f[2], 0, f[0]]; const rl = Math.hypot(r[0], r[2]); r = r.map((v) => v / rl);
+    const u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]], th = Math.tan(B.fov * Math.PI / 360);
+    /** a point h mm up the figure's axis → [its frame row, its distance from the eye] */
+    const at = (h) => { const d = [-px, B.foot + h - py, -pz], z = d[0] * f[0] + d[1] * f[1] + d[2] * f[2]; return [(1 - (d[0] * u[0] + d[1] * u[1] + d[2] * u[2]) / z / th) / 2 * B.h, z]; };
+    const hAt = (y) => { let lo = -60, hi = 160; for (let i = 0; i < 48; i++) { const m = (lo + hi) / 2; if (at(m)[0] > y) lo = m; else hi = m; } return (lo + hi) / 2; };   // (the row climbs as h does)
+    const SS = 4, rows = new Float32Array(B.h * SS * 2);   // per sub-row of the small frame: the big frame's row, its columns' spread
+    for (let q = 0; q < B.h * SS; q++) { const h2 = hAt((q + 0.5) / SS), [sy, z] = at(h2 / CARD_K), [, z2] = at(h2); rows[q * 2] = z > 1 ? sy : -1e9; rows[q * 2 + 1] = z > 1 ? z2 / (CARD_K * z) : 0; }
+    return { at, hAt, SS, rows, ax: B.w / 2 };
+  })();
+  /** a turntable frame (a baked layer), shrunk to the card's size: a layer in the same frame coordinates (its axis at x 160) */
+  function shrinkLayer(Ls) {
+    const S = SHRINK, SS = S.SS, B = BENCH_CAM;
+    const yTop = S.at(CARD_K * S.hAt(Ls.y0))[0], yBot = S.at(CARD_K * S.hAt(Ls.y0 + Ls.h))[0];
+    const Y0 = Math.max(0, Math.floor(yTop) - 2), Y1 = Math.min(B.h, Math.ceil(yBot) + 2), X0 = Math.floor(S.ax + (Ls.x0 - S.ax) * 0.47) - 2, X1 = Math.ceil(S.ax + (Ls.x0 + Ls.w - S.ax) * 0.47) + 2;
+    const w = X1 - X0, h = Math.max(1, Y1 - Y0), n = w * h, L = { name: Ls.name + '_small', w, h, x0: X0, y0: Y0, xs: [] };
+    for (const k of ['zone', 'light', 'ao', 'curv', 'spec', 'refl', 'rim', 'shadow', 'line', 'fog']) L[k] = new Uint8Array(n);
+    const cnt = new Uint16Array(256), idx = new Int32Array(SS * SS), PLS = ['light', 'ao', 'curv', 'spec', 'refl', 'rim'];
+    for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) {
+      let nz = 0, ln = 0;
+      for (let a = 0; a < SS; a++) {
+        const q = (Y0 + yy) * SS + a, ly = Math.floor(S.rows[q * 2] - Ls.y0), kx = S.rows[q * 2 + 1]; if (ly < 0 || ly >= Ls.h) continue;
+        for (let b = 0; b < SS; b++) {
+          const lx = Math.floor(S.ax + (X0 + xx + (b + 0.5) / SS - S.ax) * kx - Ls.x0); if (lx < 0 || lx >= Ls.w) continue;
+          const i = ly * Ls.w + lx; if (!Ls.zone[i]) continue;
+          cnt[Ls.zone[i]]++; idx[nz++] = i; if (Ls.line[i]) ln++;
+        }
+      }
+      if (nz * 2 < SS * SS) { for (let k = 0; k < nz; k++) cnt[Ls.zone[idx[k]]] = 0; continue; }
+      let bz = 0; for (let k = 0; k < nz; k++) { const z = Ls.zone[idx[k]]; if (cnt[z] > cnt[bz] || (cnt[z] === cnt[bz] && z < bz)) bz = z; }   // (a tie: the lower zone)
+      const o = yy * w + xx; L.zone[o] = bz; L.line[o] = ln * 10 >= nz * 3 ? 1 : 0;
+      for (const pn of PLS) { let s2 = 0, m = 0; const src = Ls[pn]; for (let k = 0; k < nz; k++) { const i = idx[k]; if (Ls.zone[i] === bz) { s2 += src[i]; m++; } } L[pn][o] = Math.round(s2 / m); }
+      for (let k = 0; k < nz; k++) cnt[Ls.zone[idx[k]]] = 0;
+    }
+    return L;
+  }
+  const SMALL = {};   // fig id → its shrunk turntable frames (layers), each made when first needed
+  function smallLayer(fid, k) {
+    const a = SMALL[fid] || (SMALL[fid] = []);
+    if (!a[k]) { const Ls = HD.layer(`${fid}_t${k}`); if (Ls.pending) return null; a[k] = shrinkLayer(Ls); }
+    return a[k];
+  }
+  /** turntable frame k of a piece at the counter's size (its paints; mode 4, as its card), or null while its theme loads */
+  function smallView(p, k) {
+    const e = lookEntry(p), sm = e.sm || (e.sm = []);
+    if (!sm[k]) { const L = smallLayer(p.fig, k); if (!L) return null; sm[k] = { L, cv: HD.outline(HD.mapLayer(L, pieceLook(p)), HD.outlinePairs(L)) }; }
+    return sm[k];
   }
   const rarOf = (p) => FIGS[figIdx(p.fig)].rar;
   function updOut() { if (P.pt > 0.55) enterPick(); }
@@ -10887,10 +11086,10 @@ const PROTO = {};
     }
     if (!J) return;
     if (ph === 'reveal' || ph === 'after' || ph === 'out') {
-      const k = ph === 'reveal' ? turnFrame(P.pt) : 0, v = k ? J.turn[k] : null;
+      const k = ph === 'reveal' ? turnFrame(P.pt) : ph === 'after' ? idleFrame() : P.outK | 0, v = k ? J.turn[k] : null;
       benchShadow(shOf(J.fig.id), k);
       if (haloOn(J)) HD.halo(160, 27, 10);
-      if (ph === 'out') { compose(J); dissolveBlit(J.cv, J.L.x0, J.L.y0, 1 - P.pt / 0.5); return; }
+      if (ph === 'out') { if (v) dissolveBlit(v.cv, v.L.x0, v.L.y0, 1 - P.pt / 0.5); else { compose(J); dissolveBlit(J.cv, J.L.x0, J.L.y0, 1 - P.pt / 0.5); } return; }
       if (v) { blit(v.cv, v.L.x0, v.L.y0); HD.drawGlows(v.gl, v.L.x0, v.L.y0); if (v.eyes) keepEyes(v.cv, v.L, v.eyes); if (v.maw) emberBloom(v.L, v.L.x0 + v.maw.x, v.L.y0 + v.maw.y, J.gw.r); }
       else { compose(J); blit(J.cv, J.L.x0, J.L.y0); HD.drawGlows(J.gl, J.L.x0, J.L.y0); keepEyes(J.cv, J.L, dottedEyes(J)); if (J.gw && J.gw.r > 0) emberBloom(J.L, J.L.x0 + J.gw.x, J.L.y0 + J.gw.y, J.gw.r); finishFX(J, ph === 'after' ? P.pt + 9 : P.pt - STAMP); }
       return;
@@ -10942,9 +11141,11 @@ const PROTO = {};
   /** the supply shelf's display plinth (baked where the bench's cork is, so a figure or the pack stands on it exactly), its top
    *  in the rarity's light like the bench's cork (rar < 0: plain) */
   const PL = { L: null, cv: null };
-  function plinth(dx, rar, k) {
+  function plinth(dx, rar, k, dy = 0) {
     if (!PL.L) { PL.L = HD.layer('plinth'); PL.cv = HD.outline(HD.mapLayer(PL.L, null), HD.outlinePairs(PL.L)); }
-    const L = PL.L; blit(PL.cv, L.x0 + dx, L.y0); alsoWide((wx, wy) => blit(PL.cv, L.x0 + dx + wx, L.y0 + wy));   // (M3: down past the frame)
+    const L = PL.L;
+    if (dy) { clip(0, VT, W, H - VT); blit(PL.cv, L.x0 + dx, L.y0 + dy); unclip(); alsoWide((wx, wy) => blit(PL.cv, L.x0 + dx + wx, L.y0 + dy + wy)); return; }   // (round 14: the close look's, rising from the screen's bottom edge or sinking back)
+    blit(PL.cv, L.x0 + dx, L.y0); alsoWide((wx, wy) => blit(PL.cv, L.x0 + dx + wx, L.y0 + wy));   // (M3: down past the frame)
     if (rar < 0 || k <= 0) return;
     const ramp = RAMP[RAR[rar].ramp], n = ramp.length, cx = L.w / 2, WBd = BLEED.on && BLEED.src && BLEED.src.d === HD.WB.d ? HD.WB : null;
     for (let y = 0; y < L.h; y++) for (let x = 0; x < L.w; x++) {
@@ -11114,7 +11315,11 @@ const PROTO = {};
       const lk = looks(p, 'card'), L = lk.L, sel = k === P.sellSel, lift = sel ? 3 : 0;
       shadowEll(x, by, 15, 3);
       if (sel) ell(x, by, 17, 4, rcol(rarOf(p)));
-      dissolveBlit(lk.cv, Math.round(x - L.w / 2), by - L.h + 2 - lift, P.dis);
+      // round 14: the chosen piece turns on its pad, at its size (the bench's turntable shrunk: its axis on the pad's middle,
+      // its base where the card's is), its first turn at once, then as the pile — not behind the back room's panel
+      const sv = sel && !piecesOnly && !L.pending ? smallView(p, turnAt(p === P.turnP ? P.sellRot || 0 : TURN_SOON)) : null;   // (chosen this tick: its front — the clock resets next tick: the review)
+      if (sv) dissolveBlit(sv.cv, sv.L.x0 + Math.round(x - SHRINK.ax), sv.L.y0 + by + 2 - lift - (L.y0 + L.h), P.dis);
+      else dissolveBlit(lk.cv, Math.round(x - L.w / 2), by - L.h + 2 - lift, P.dis);
       tent(x, by + 4, fmtShort(SHOP.tagNow(p)));
       P.btns.push({ id: 'pc' + k, x: x - 17, y: by - L.h, w: 34, h: L.h + 13, on: true });
     }
@@ -11483,7 +11688,7 @@ const PROTO = {};
       if (k < cap) HD.bandGlow(x, y - 12, 7, 15, 1); else { remapRect(x - 13, y - 34, 27, 36, DARK[2]); lock(x - 3, y - 12, C.UI4); }
     }
     list.forEach((p, k) => {
-      if (k >= CASE_SLOTS) return;
+      if (k >= CASE_SLOTS || (P.zoom && P.zoom.p === p)) return;   // (round 14: the one looked at is off the shelf)
       const [x, y] = caseSlot(k), lk = looks(p, 'mini'), L = lk.L, sel = k === P.caseSel;
       shadowEll(x, y, 10, 2);
       if (sel) ell(x, y, 12, 3, rcol(rarOf(p)));
@@ -11493,6 +11698,7 @@ const PROTO = {};
         remapRect(tx - 1, ty, tw + 2, 8, DARK[4]); boostIcon(p.b.k, tx, ty); textO(t, tx + 9, ty + 1, C[BOOST_COL[p.b.k]], C.UI0, FONT_S, 1, 0); }
       P.btns.push({ id: 'pc' + k, x: x - 14, y: y - L.h, w: 28, h: L.h + 6, on: true });
     });
+    if (P.zoom) { P.btns.length = 0; hud(); drawZoom(); }   // (the shelf's spots take no taps under the close look)
     bottom();
     const sel = P.caseSel >= 0 ? list[P.caseSel] : null;
     if (sel) {
@@ -11508,8 +11714,9 @@ const PROTO = {};
         textO(`${list.length}/${cap}`, W - 6, VB + 6, C.CRM0, C.UI0, FONT_S, 1, 2); }
     } else { textO(T('The shelf is empty'), 6, VB + 5, C.CRM1, C.UI0, FONT_M, 1, 0); btn('bench', T('WORKBENCH'), W - 82, VB + 2, 78, 13, { primary: true, sel: true }); }
   }
-  function twinkle(J) {
-    for (const s of J.twk) { const v = Math.sin(TIME * 2.3 + s.ph); if (v < 0.9) continue; const x = J.L.x0 + (s.i % J.L.w), y = J.L.y0 + ((s.i / J.L.w) | 0); FB[y * W + x] = v > 0.97 ? C.LIT3 : C.Y7;
+  function twinkle(J) { twinkleAt(J.twk, J.L, J.L.x0, J.L.y0); }
+  function twinkleAt(list, L, x0, y0) {
+    for (const s of list) { const v = Math.sin(TIME * 2.3 + s.ph); if (v < 0.9) continue; const x = x0 + (s.i % L.w), y = y0 + ((s.i / L.w) | 0); if (x < 0 || x >= W || y < 0 || y >= H) continue; FB[y * W + x] = v > 0.97 ? C.LIT3 : C.Y7;
       if (v > 0.985) { if (x > 0) FB[y * W + x - 1] = C.Y6; if (x < W - 1) FB[y * W + x + 1] = C.Y6; if (y > 0) FB[(y - 1) * W + x] = C.Y6; if (y < H - 1) FB[(y + 1) * W + x] = C.Y6; } }
   }
   /** the finish comes alive after the stamp: a light sweep over metallic / pearl / starlight paint, starlight twinkles */
@@ -12033,7 +12240,9 @@ const PROTO = {};
   Object.assign(PROTO, { P, ST, resetLoad, ext: (ph, def) => { EXT[ph] = def; }, station: (key, enter) => { STX[key] = enter; }, go, say, pop, sfx, burst, btn, hitBtn, overUI,
     panel, bottom, band, prompt, looks, figIdx, FIGS, RAR, rcol, fmtShort, fmtNum, gainXP, toRoom, toStation, mark, chip, drawPot, coinIcon, boostIcon,
     pctB, boostName, BOOST_COL, tent, shadowEll, blitClip, listPiece, auctionsFull, buildShelf, alsoWide, shelfNow: () => { buildShelf(); for (const m of R.shelf) if (m) m.fade = 1; }, backdrop, PTR, holdAny, newHold, aimRing, webOpen, potsOfHue, dissolveBlit, lock, gem, emblem, orderIcon, hueRamp });
-  if (typeof DEV !== 'undefined') DEV.proto = { debugState: (p) => debugState(p), slideTray, bottleTray, addDrop, buyPigment, mixAll, startMix, undoMix, clearLoad, rackPick, wellTap, rackList, load: () => P.load, trayCell: (i) => { const g = TG(), [x, y] = cellXY(i); return [x + (g.cell >> 1), y + (g.cell >> 1), g.r]; }, usable, ALLH, LEGS, buyPot, buyPotPack, isFree, potsOf, buyPack, P, FIGS, FINS, RAR, PACK, packPrice, packWorth, costOf, AIM, valueOf, quality, recipe, rollPack, nSteps, oslColour, shelfFades: () => R.shelf.map((m) => (m ? m.fade : -1)), R, emblem, ICON_ART, ptr: () => JSON.stringify([...PTR]), ST, CASE_SLOTS, caseSlot, offerAt, toCase, buyPlan, figIdx, gradeOf, masterQ, bringForward, slotX, fitting, flipSign, applyLamp, timing: () => ({ WIN, CRISP, PERFECT, GOOD, WASH_OK, WASH_WIN }), tipBtn, TIP, POINT_STEPS };
+  if (typeof DEV !== 'undefined') DEV.proto = { debugState: (p) => debugState(p), slideTray, bottleTray, addDrop, buyPigment, mixAll, startMix, undoMix, clearLoad, rackPick, wellTap, rackList, load: () => P.load, trayCell: (i) => { const g = TG(), [x, y] = cellXY(i); return [x + (g.cell >> 1), y + (g.cell >> 1), g.r]; }, usable, ALLH, LEGS, buyPot, buyPotPack, isFree, potsOf, buyPack, P, FIGS, FINS, RAR, PACK, packPrice, packWorth, costOf, AIM, valueOf, quality, recipe, rollPack, nSteps, oslColour, shelfFades: () => R.shelf.map((m) => (m ? m.fade : -1)), R, emblem, ICON_ART, ptr: () => JSON.stringify([...PTR]), ST, CASE_SLOTS, caseSlot, offerAt, toCase, buyPlan, figIdx, gradeOf, masterQ, bringForward, slotX, fitting, flipSign, applyLamp, timing: () => ({ WIN, CRISP, PERFECT, GOOD, WASH_OK, WASH_WIN }), tipBtn, TIP, POINT_STEPS,
+    turnAt, idleFrame, IDLE_HOLD, IDLE_TURN, TURN_SOON, SPIN, BTNS_AT, CARD_K, BENCH_CAM, SHRINK, shrinkLayer, smallView, pieceTurn, pieceDots, eyeDots, openZoom, ZOOM_IN, ZOOM_OUT, ZOOM_ARM, looks,
+    paintName, BASES, VT, VB, zoomE, hash, blitZoomed };
 
   // ================================================================== the title: the room, a finished hero, the name
   const TT = { J: null, t: 0, arm: 0, btns: [] };
@@ -12147,7 +12356,7 @@ const PROTO = {};
     J.si = target - 1; nextStep();
     if (j === 'coat' && p.D) { const F = J.fl; F.D = F.maxD * +p.D; paintTo(J, F, F.D, true); }                                   // a flood part-way (screenshots)
     if (j === 'glow' && p.G && J.gw) { const g = J.gw; g.hold0 = 0; g.H.code = 'dbg'; P.holdDbg = 20; g.r = GLOW_R * +p.G; oslBands(J.L, g.x, g.y, g.r, J.osl); }   // a glow held for 20 ticks
-    if (j === 'after') { P.pt = BTNS_AT; go('after'); }
+    if (j === 'after') { P.pt = BTNS_AT; P.rot = BTNS_AT - SPIN; go('after'); }
   }
 })();
 
