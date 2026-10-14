@@ -8441,7 +8441,7 @@ const SHOP = (() => {
     50800, 54500, 58600, 62800, 67100, 71600, 76100, 80800, 85700, 90700, 95800, 101000, 106300, 111800, 117500, 123200, 129100, 135100, 141200, 147500, 153900, 160400, 167100, 173900, 180800, 187900, 195000, 202300, 209800];
   const KILLS = WOW_XP.map((x, i) => x / (45 + 5 * (i + 1))), KILLS_ALL = KILLS.reduce((a, b) => a + b, 0);
   const minutesFor = (L) => (L >= 1 && L < MAX_LVL ? KILLS[L - 1] / KILLS_ALL * HOURS * 60 : 0);
-  const XP_RATE = 32.1;   // XP a minute at tier 1 for a sensible player (calibrated with tools/econ_sim.mjs: level 60 in ~240 h; M5: x1.04 with the Legendaries' coins)
+  const XP_RATE = 31.0;   // XP a minute at tier 1 for a sensible player (calibrated with tools/econ_sim.mjs: level 60 in ~240 h; M5: x1.04 with the Legendaries' coins; round 12: 32.1 → 31.0 — rares only out of packs, the drops back into the jars)
   /** the first levels need less than the straight scale: the shop's XP sources open one by one (the notebook at level 2,
    *  commissions at 4) and the display shelf's boosts build up, so a sensible player earns less a minute at first (x0.5 at
    *  level 1, x0.76 at 10, x0.95 at 30, ~x1 from 50: fitted with tools/econ_sim.mjs to WoW's shape, round 8; M5: 0.53, with
@@ -8495,16 +8495,17 @@ const SHOP = (() => {
     { id: 'lights', name: N_('SHELF SPACE'), c1: 250, g: 1.75, max: 10, lv: 2, fx: (L) => TF('{count} SPOTS ON THE DISPLAY SHELF: EVERY PIECE ON IT GIVES ITS BOOST', { count: caseLit(L) }), sh: (L) => TF('{count} SPOTS', { count: caseLit(L) }) },
     { id: 'web', name: N_('WEBSHOP'), c1: 300, g: 2.0, max: 5, lv: 5, fx: (L) => TF('{count} AUCTIONS AT ONCE ON THE NOTEBOOK', { count: listSlots(L) }), sh: (L) => TF('{count} AUCTIONS', { count: listSlots(L) }) },
     // M4 (Alex: "better mixing tables > more/new colors able to mix"): a bigger tray = more room to climb (Pearl, Starlight, a
-    // recipe's two Pearls side by side), more drops in a jar = more pots a session
-    { id: 'table', name: N_('MIXING TRAYS'), c1: 260, g: 2.4, max: 5, lv: 4, fx: (L) => TF('A {cols}x{rows} TRAY · {count} DROPS A JAR', { cols: tableAt(L).cols, rows: tableAt(L).rows, count: tableAt(L).drops }), sh: (L) => TF('TRAY {cols}x{rows}', { cols: tableAt(L).cols, rows: tableAt(L).rows }) },
+    // recipe's two Pearls side by side), more drops in a mix = more pots a session
+    { id: 'table', name: N_('MIXING TRAYS'), c1: 260, g: 2.4, max: 5, lv: 4, fx: (L) => TF('A {cols}x{rows} TRAY · {count} DROPS A MIX', { cols: tableAt(L).cols, rows: tableAt(L).rows, count: tableAt(L).drops }), sh: (L) => TF('TRAY {cols}x{rows}', { cols: tableAt(L).cols, rows: tableAt(L).rows }) },
   ];
   const pct = (x) => Math.round(x * 100) + '%';
   const masterQ = (L = up('brush')) => 0.70 + 0.22 * Math.pow(0.96, L / FINE);   // Masterwork from this craft score (0.92 at L0, 0.85 at L40)
   const masterK = (L = up('brush')) => 1.4 + 0.005 * L / FINE;                    // the Masterwork bonus
   const brushK = (L = up('brush')) => Math.pow(1.02, L / FINE);                   // finer brushes, finer work: every tag x1.02 every four levels
-  /** M4: the mixing table's levels — its tray (src/65_tray.js TRAYS) and the drops a jar (or a session of your pigments) holds */
-  const TABLES = [{ tray: 'wood', cols: 4, rows: 4, drops: 16 }, { tray: 'porcelain', cols: 5, rows: 4, drops: 16 }, { tray: 'porcelain', cols: 5, rows: 4, drops: 20 },
-    { tray: 'oak', cols: 5, rows: 5, drops: 20 }, { tray: 'oak', cols: 5, rows: 5, drops: 24 }, { tray: 'marble', cols: 6, rows: 5, drops: 24 }];
+  /** M4: the mixing table's levels — its tray (src/65_tray.js TRAYS), the drops a mix's dropper holds and (round 12) how many pots
+   *  from the rack a mix may start with (pre: 2 on the 4x4, as Tom's Tiny Armies; 3 on the porcelain, 4 on the marble) */
+  const TABLES = [{ tray: 'wood', cols: 4, rows: 4, drops: 16, pre: 2 }, { tray: 'porcelain', cols: 5, rows: 4, drops: 16, pre: 3 }, { tray: 'porcelain', cols: 5, rows: 4, drops: 20, pre: 3 },
+    { tray: 'oak', cols: 5, rows: 5, drops: 20, pre: 3 }, { tray: 'oak', cols: 5, rows: 5, drops: 24, pre: 3 }, { tray: 'marble', cols: 6, rows: 5, drops: 24, pre: 4 }];
   const tableAt = (L = up('table')) => TABLES[Math.max(0, Math.min(TABLES.length - 1, L | 0))];
   const ARRIVE = [45, 40, 35, 30, 26, 22, 19];
   const arrivalEvery = (L = up('sign')) => ARRIVE[Math.min(L, ARRIVE.length - 1)];
@@ -8514,24 +8515,14 @@ const SHOP = (() => {
   const tipK = (L = up('tea')) => (L ? 0.06 + 0.03 * (L - 1) : 0);   // 6% … 27% at its best
   const lampK = (L = up('lamp')) => 1 + 1.5 * (1 - Math.pow(0.97, L));   // the timing windows: x1.4 at level 10, x1.8 at 25, x2.2 at 50, toward x2.5
   const MARKET_LV = 2, MIX_LV = 3, COMM_LV = 4;   // (round 8: the mixing table before the commissions — every letter wants a mixed colour)
-  /** the mixing table's pigment jars (src/65_tray.js: 16 drops each; mixed in the tray, bottled into pots): their price, x the
-   *  newest theme's value (pots are worth what they add to a piece). ONE COLOUR, TINT and SHADE are of the colour you choose
-   *  (TINT: 8 of it + 8 white → its tint; SHADE: + 8 black → its shade: the mixed colours commissions ask for) */
-  const JARS = [   // (name / note: English keys, the draw site translates them)
-    { id: 'prim', name: N_('PRIMARIES'), note: N_('{count} R, Y, B: THEY MIX'), k: 40 },
-    { id: 'one', name: N_('ONE COLOUR'), note: N_('{count}: IT CLIMBS HIGHEST'), k: 60 },
-    { id: 'tint', name: N_('TINT'), note: N_('{half} + {half} WHITE: ITS TINT'), k: 60 },
-    { id: 'shade', name: N_('SHADE'), note: N_('{half} + {half} BLACK: ITS SHADE'), k: 60 },
-  ];
-  /** the drops of a jar: k = a JARS index, h = the chosen colour (ONE COLOUR / TINT / SHADE), rnd → [hue …] (shuffled; 16, or
-   *  more with the MIXING TABLE upgrade, M4) */
-  function jarDrops(k, h, rnd) {
-    const id = JARS[k].id, q = [], n0 = tableAt().drops;
-    for (let n = 0; n < n0; n++) q.push(id === 'prim' ? ['R', 'Y', 'B'][Math.floor(rnd() * 3)] : id === 'one' ? h : n % 2 ? h : id === 'tint' ? 'W' : 'K');
-    for (let i = q.length - 1; i > 0; i--) { const r = Math.floor(rnd() * (i + 1)), t = q[i]; q[i] = q[r]; q[r] = t; }
-    return q;
-  }
-  const jarPrice = (k) => Math.round(JARS[k].k * D.VAL(tierAt(lvl())) * tableAt().drops / 16);   // (a bigger jar costs its drops)
+  /** ROUND 12 (Alex: "instead of buying jars, pigments are bought and can be individually selected (pigments i have in stock)"):
+   *  PIGMENTS are bought at the mixing table, a SACHET of drops of one colour into its jar (G.S.drops), and the dropper is filled
+   *  from the jars drop by drop (src/62_proto.js). A drop costs what it did in round 11's jars — a primary 2.5 (the PRIMARIES
+   *  jar's 40 / 16), a secondary, white or black 3.75 (ONE COLOUR's 60 / 16) — x the newest theme's value (pots are worth what
+   *  they add to a piece) */
+  const SACHET = 8, DROP_K = { prim: 2.5, other: 3.75 };
+  const dropPrice = (h) => (h === 'R' || h === 'Y' || h === 'B' ? DROP_K.prim : DROP_K.other) * D.VAL(tierAt(lvl()));
+  const sachetPrice = (h) => Math.max(1, Math.round(dropPrice(h) * SACHET));
   // ================================================================== M4: PAINT YOU USE UP (Alex: "the color matching game is great … can
   // be bought in shop with rarities, then mixed in packages")
   // Matte is free; every other finish is a POT a piece uses up (G.S.pots: 'R2' = crimson Metallic → how many). The finishes you
@@ -8539,8 +8530,8 @@ const SHOP = (() => {
   // know you can also buy as ready pots, dearer than mixing them. The mixing table teaches SATIN when it opens.
   /** the highest finish you know (0 Matte … 4 Starlight): your tray climbs this far */
   const topFin = () => { const o = (G.S && G.S.fins) || {}; let k = 0; FIN_IDS.forEach((id, i) => { if (o[id]) k = i; }); return k; };
-  /** a ready pot of finish f (a colour of the bench's eight): its drops' worth out of a ONE COLOUR jar, x1.6 (mixing pays) */
-  const potPrice = (f) => Math.max(1, Math.round(JARS[1].k * D.VAL(tierAt(lvl())) / 16 * Math.pow(2, f) * 1.6));
+  /** a ready pot of finish f (a colour of the bench's eight): its drops' worth (a non-primary's, 3.75), x1.6 (mixing pays) */
+  const potPrice = (f) => Math.max(1, Math.round(DROP_K.other * D.VAL(tierAt(lvl())) * Math.pow(2, f) * 1.6));
   /** PIGMENT PACKS: five cards, each by rarity (like the figures' packs): COMMON 4 drops of a primary, UNCOMMON 4 of a secondary or
    *  of white / black, RARE two pots already mixed (Satin + Metallic of one colour), EPIC a Legendary recipe card + a Pearl pot of
    *  one of its two colours (every recipe known: two Pearl pots). The drops go to YOUR PIGMENTS (G.S.drops), mixed at the table */
@@ -8843,10 +8834,10 @@ const SHOP = (() => {
    *  a piece that meets it is tagged, and COMM_XP x the XP of painting one */
   const COMM_PAY = 2, COMM_XP = 24;
   /** the mixed colours letters ask for at level L: the tints of the primaries first (rose, cream, sky), every tint from level
-   *  10, the shades too from 20 — a jar makes about three pots of one, so a small set to start keeps them within reach */
+   *  10, the shades too from 20 — a mix of 8 + 8 makes about three pots of one, so a small set to start keeps them within reach */
   const commColours = (L = lvl()) => (typeof TRAY === 'undefined' ? [] : L < 10 ? ['ROS', 'CRE', 'SKY'] : L < 20 ? ['ROS', 'CRE', 'SKY', 'PCH', 'MNT', 'LIL'] : TRAY.MIXED);
-  /** what mixing a letter's colour costs, on top of its pay: a third of a TINT jar for each mixed colour (a jar makes ~3 pots) */
-  const mixFee = (order) => { const c = order.find((o) => o.k === 'col'); return c ? ((isMixed(c.v) ? 1 : 0) + (c.b && isMixed(c.b) ? 1 : 0)) * Math.round(JARS[2].k * D.VAL(tierAt(lvl()))) / 3 : 0; };   // (a third of a 16-drop TINT jar: not more with a bigger tray, M4 review)
+  /** what mixing a letter's colour costs, on top of its pay: a third of 16 drops (8 + 8 white or black: ~3 pots) for each mixed colour */
+  const mixFee = (order) => { const c = order.find((o) => o.k === 'col'); return c ? ((isMixed(c.v) ? 1 : 0) + (c.b && isMixed(c.b) ? 1 : 0)) * Math.round(16 * DROP_K.other * D.VAL(tierAt(lvl()))) / 3 : 0; };   // (a third of a 16-drop TINT jar: not more with a bigger tray, M4 review)
   function newCommission(rnd) {
     const L = lvl(), cr = L < 8 ? 1 : L < 20 ? 2 : rnd() < 0.5 ? 2 : 3, MX = commColours(L);
     const a = MX[Math.floor(rnd() * MX.length)], b = cr >= 2 && rnd() < 0.5 ? MX.filter((x) => x !== a)[Math.floor(rnd() * (MX.length - 1))] : null;
@@ -8963,7 +8954,7 @@ const SHOP = (() => {
     document.addEventListener('visibilitychange', back); window.addEventListener('pageshow', back);
   } catch (e) { /* headless */ }
 
-  return { LEG_ODDS, PITY, CR, PLAQUES, TRACKS, KINDS, HUES, HUE_WORD, MAX_LVL, COMM_LV, MIX_LV, MARKET_LV, JARS, jarPrice, jarDrops, TABLES, tableAt, topFin, potPrice, PIG, pigPrice, rollPig, openPig, dropsHeld, AUTO_AT, HOURS, XP_RATE, ensure, setOpen, tick, catchUp, arrivals, commArrivals, lvl, up, tierOf, figTier,
+  return { LEG_ODDS, PITY, CR, PLAQUES, TRACKS, KINDS, HUES, HUE_WORD, MAX_LVL, COMM_LV, MIX_LV, MARKET_LV, SACHET, dropPrice, sachetPrice, TABLES, tableAt, topFin, potPrice, PIG, pigPrice, rollPig, openPig, dropsHeld, AUTO_AT, HOURS, XP_RATE, ensure, setOpen, tick, catchUp, arrivals, commArrivals, lvl, up, tierOf, figTier,
     BOOSTS, caseLit, boostMax, rollBoost, boost, arrangeCase, payout, boostXP, arriveEvery, FRESH, isMixed, mixWords,
     AUCTION_MS, BIN_MS, listSlots, BIDDERS, rating, marketMean, newListing, bidNow, marketTick, starsOf, ship, BOOST_CAP, settlePending,
     unlockLevel, seriesOpen, tierAt, xpNeed, xpPaint, xpSell, addXP, unlocksAt, minutesFor, xpTier,
@@ -9754,7 +9745,7 @@ const PROTO = {};
     if (IN.pressed('left')) d = -1; if (IN.pressed('right')) d = 1;   // the arrow keys walk every figure you have
     if (d && own.length > 1) { P.sel = own[(own.indexOf(P.sel) + d + own.length) % own.length]; P.pileTh = FIGS[P.sel].s; P.rot = 0; P.dis = 0.35; sfx('ui_move'); }
     if (b === 'th<' || IN.keyPressed('ArrowUp')) setPileTheme(-1); if (b === 'th>' || IN.keyPressed('ArrowDown')) setPileTheme(1);   // (S stays the supply shelf)
-    if (b && b.startsWith('pf')) { const fi = +b.slice(2); if (pileOf(fi) > 0) { if (fi !== P.sel) { P.sel = fi; P.rot = 0; P.dis = 0.35; sfx('ui_move'); } } else { sfx('ui_back', { vol: 0.6 }); say(TF('No {name} in your pile: the supply shelf has it', { name: T(FIGS[fi].name) })); } }
+    if (b && b.startsWith('pf')) { const fi = +b.slice(2); if (pileOf(fi) > 0) { if (fi !== P.sel) { P.sel = fi; P.rot = 0; P.dis = 0.35; sfx('ui_move'); } } else { sfx('ui_back', { vol: 0.6 }); say(TF(packOnly(fi) ? 'No {name} in your pile: it comes only out of a pack (the supply shelf)' : 'No {name} in your pile: the supply shelf has it', { name: T(FIGS[fi].name) })); } }
     if (IN.pressed('cancel') || b === 'room') { toRoom(); return; }
     if (b === 'shop' || IN.keyPressed('KeyS') || (IN.pressed('confirm') && P.sel < 0)) { toStation('supply'); return; }
     if ((IN.pressed('confirm') || b === 'paint') && P.sel >= 0 && pileOf(P.sel) > 0) {
@@ -9783,6 +9774,9 @@ const PROTO = {};
   const shopThemes = () => { const L = SHOP.lvl(), open = SERIES.filter((sd) => SHOP.unlockLevel(sd.tier) <= L), next = SERIES.find((sd) => SHOP.unlockLevel(sd.tier) > L); return next ? open.concat([next]) : open; };
   const themeLocked = (sd) => SHOP.unlockLevel(sd.tier) > SHOP.lvl();
   const shopPrice = (k) => (k < 0 ? packPrice(P.series) : FIGS[k].cost);
+  /** round 12 (Alex: "make it so that rare and legendary figures can not be bought individually but just looted from packs"): from
+   *  RARE up — rare, epic and Legendary — a figure comes only out of a pack (its price still makes its worth) */
+  const packOnly = (fi) => !!FIGS[fi] && FIGS[fi].rar >= 2;
   function setShop(k) { if (k !== P.shopSel) { P.shopSel = k; P.rot = 0; P.dis = 0.35; sfx('ui_move'); } }
   function setSeries(sid) { if (sid === P.series) return; P.series = sid; G.S.shopTh = sid; HD.theme.need(sid); P.shopSel = FIGDEF.ofSeries(sid)[0]; P.rot = 0; P.dis = 0.35; sfx('page'); }
   function updShop() {
@@ -9804,6 +9798,7 @@ const PROTO = {};
   }
   function buyFig(fi) {
     const f = FIGS[fi];
+    if (packOnly(fi)) { sfx('ui_back'); say(TF('{name} is {rarity}: it comes only out of a pack', { name: T(f.name), rarity: T(RAR[f.rar].name).toLowerCase() })); return; }
     if (G.S.money < f.cost) { sfx('ui_back'); say(TF('{name} costs {money}: sell a few pieces first', { name: T(f.name), money: fmtMoney(f.cost) })); return; }
     G.addMoney(-f.cost, 'stock'); G.S.pile[f.id] = pileOf(fi) + 1; G.save(); sfx('till'); P.sel = fi;
     burst(ST.key === 'supply' ? 250 : R.cork.cx, ST.key === 'supply' ? 120 : R.cork.y0 - 6, 10, rcol(f.rar)); say(TF('{name} is in your pile ({count})', { name: T(f.name), count: pileOf(fi) }));
@@ -10501,20 +10496,27 @@ const PROTO = {};
     } else if (b === 'deliver') { sfx('ui_back'); say(T('Nothing you have meets every line yet')); }
   }
 
-  // ---- THE MIXING TABLE (from level SHOP.MIX_LV — the mixing milestone starts here): buy a jar of pigment (16 drops) and mix it
-  //      in the tray, Tom's 2048 (src/65_tray.js): swipe (or the arrows) and every drop slides to that wall; two of a colour and
-  //      finish merge one finish up, two different primaries mix into their secondary (R + Y = O, Y + B = G, R + B = V); white
-  //      and black only meet their twins. Each slide lets the next drop fall in. BOTTLE when you like (or when nothing moves):
-  //      every Satin-or-better pot goes into your rack. A recipe's two Pearls fuse into a LEGENDARY paint. New colours and
-  //      finishes go into the swatch book.
-  //      M4: your TECHNIQUES cap the climb (a finish you haven't learned bumps, like a Starlight); the MIXING TABLE upgrade brings
-  //      bigger trays and more drops a jar (SHOP.tableAt); PIGMENT PACKS (five cards by rarity) fill YOUR PIGMENTS, mixed with
-  //      MIX MY PIGMENTS; the RECIPE BOOK shows the Legendary paints you know. Three tabs on the right: JARS, PIGMENTS, RECIPES.
-  //      After M6 (Alex's notes): FOUR tabs — JARS shows the colours first (a tap: that colour's jars), RACK shows your pots as
-  //      BOTTLES on shelves (paged, 24 a page), and a tap on one pours it back into the tray to climb on (rackToTray: two Satins
-  //      merge into a Metallic, two Pearls of a recipe fuse; a mix from the rack has nothing in the dropper). A finish wears its
-  //      RARITY COLOUR everywhere (finCol: a drop's ring and pips, a bottle's glass): Satin green, Metallic blue, Pearl purple,
-  //      Starlight gold, a Legendary paint orange.
+  // ---- THE MIXING TABLE (from level SHOP.MIX_LV). ROUND 12: as in Tom's Tiny Armies (Alex: "instead of buying jars, pigments
+  //      are bought and can be individually selected (pigments i have in stock). build the system like in toms tinys armies with
+  //      the exception that pigments can be directly bought at the mixing table plus the additions that we made (more colors
+  //      etc.) but the minigame should work the same. i can select pigments, they appear randomized on some places + i can place
+  //      jars directly to mix rarers ones"). A mix has three parts:
+  //      LOAD     YOUR PIGMENTS are eight jars of drops (G.S.drops). A tap on a jar (or 1-8; held: one after another) lets a drop
+  //               of it into THE DROPPER, up to SHOP.tableAt().drops (16 … 24); the + under a jar buys a sachet (SHOP.SACHET
+  //               drops; Shift+1-8); MIX ALL (A) fills the dropper from the fullest jars; CLEAR empties it and the wells;
+  //               Backspace takes the last drop back. PRE-POUR (the RACK tab): a pot, then a well — the mix starts with it there
+  //               (up to SHOP.tableAt().pre: 2 … 4), to mix your pots on into rarer ones. START (ENTER) wants two drops or pots;
+  //               nothing leaves the jars or the rack before it.
+  //      PLAY     START shuffles the dropper (the luck in the tray), sets the pre-poured pots in their wells and lets two drops
+  //               fall on random empty ones; then Tom's 2048 (src/65_tray.js), as before: swipe (or the arrows) and every drop
+  //               slides to that wall; two of a colour and finish merge one finish up; two different primaries mix into their
+  //               secondary (R + Y = O, Y + B = G, R + B = V); white and black tint and shade a colour; two Pearls of a recipe
+  //               fuse into its LEGENDARY paint; your TECHNIQUES cap the climb (M4). Each slide lets the next drop fall in (the
+  //               next two show); one UNDO a mix (U), as in TTA. BOTTLE (B) when you like.
+  //      BOTTLED  every Satin-or-better pot goes into YOUR RACK; the Matte drops and the ones still in the dropper go back to
+  //               their jars — nothing is lost (TTA's rule). AGAIN (ENTER) loads the next mix, DONE leaves the table.
+  //      The PACKS tab sells pigment packs (M4: drops, ready pots, recipe cards); RECIPES is the book of the Legendary paints.
+  //      A finished colour's finish shows by its pips: Satin •, Metallic ••, Pearl •••, Starlight ★ (round 12: nothing else).
   /** the tray's geometry for a w x h board: 26 px wells on the 4x4, 24 on 5 columns, 22 on 5 rows, 20 on 6 columns */
   function trayGeo(w, h) {
     const cell = w >= 6 ? 20 : h >= 5 ? 22 : w >= 5 ? 24 : 26, gap = 3, pad = 5, tw = 2 * pad + w * cell + (w - 1) * gap, th = 2 * pad + h * cell + (h - 1) * gap;
@@ -10526,32 +10528,98 @@ const PROTO = {};
   const cellXY = (i) => { const g = TG(); return [g.x + g.pad + (i % g.w) * (g.cell + g.gap), g.y + g.pad + ((i / g.w) | 0) * (g.cell + g.gap)]; };
   const mixOn = () => !!(G.S.mix && Array.isArray(G.S.mix.cells));
   const trayOpts = () => ({ top: SHOP.topFin() });   // M4: your techniques: the highest finish your tray makes
-  function enterMix() { P.dis = 0; P.mixHue = P.mixHue || 0; P.mixAnim = null; P.bottled = null; P.swipe = null; P.mixTab = P.mixTab || 'jars'; P.jarOpen = null; P.jarOpt = 0; P.jarKey = false; P.rackKey = false; P.rackGhost = null; go('mix'); }
-  /** the colour a jar would be made of (ONE COLOUR: any of the eight; TINT / SHADE: a colour, not white or black) */
-  const jarHue = (k) => { const id = SHOP.JARS[k].id, h = HUES[P.mixHue | 0]; return id === 'prim' ? null : (id === 'tint' || id === 'shade') && (h === 'W' || h === 'K') ? null : h; };
-  /** what a TINT / SHADE jar makes of the chosen colour ('ROS'), or null */
-  const jarMakes = (k) => { const id = SHOP.JARS[k].id, h = jarHue(k); if (!h || (id !== 'tint' && id !== 'shade')) return null; return TRAY.mixOf(h, id === 'tint' ? 'W' : 'K'); };
-  /** a session starts: the table's tray, the drops in the dropper (q), the first two in the wells */
-  function startSession(q, jar, paid) {
-    const t = SHOP.tableAt(), cells = new Array(t.cols * t.rows).fill(null);
-    for (let n = 0; n < TRAY.START_DROPS && q.length; n++) { const e = []; cells.forEach((c, i) => { if (!c) e.push(i); }); cells[e[Math.floor(RNG.f() * e.length)]] = { h: q.shift(), f: 0 }; }
-    G.S.mix = { cells, q, jar, paid, n: q.length + TRAY.START_DROPS, w: t.cols, h: t.rows }; G.save(); sfx('pour'); P.dis = 0; P.bottleArm = 0; P.mixT = TIME; P.rackFocus = false;   // (mixT: the rack's shelves ignore the jar tap's second tap)
+  const MIX_TABS = ['pig', 'rack', 'packs', 'book'];
+  function enterMix() {
+    P.dis = 0; P.mixAnim = null; P.bottled = null; P.swipe = null; P.mixTab = MIX_TABS.indexOf(P.mixTab) >= 0 ? P.mixTab : 'pig';
+    P.rackKey = false; P.preSel = null; P.jarHold = null; P.wcur = -1; loadFit(); go('mix');
   }
-  function buyJar(k) {
-    const price = SHOP.jarPrice(k), j = SHOP.JARS[k];
-    if ((j.id === 'tint' || j.id === 'shade') && !jarHue(k)) { sfx('ui_back'); say(TF('Choose a colour for the {jar} jar (not white or black)', { jar: inLine(T(j.name)) })); return; }
-    if (G.S.money < price) { sfx('ui_back'); say(TF('A jar of {jar} costs {money}', { jar: inLine(T(j.name)), money: fmtMoney(price) })); return; }
-    G.addMoney(-price, 'pigment');
-    startSession(SHOP.jarDrops(k, jarHue(k), () => RNG.f()), j.id, price);
+  /** LOAD: the dropper's drops in the order they went in, and the rack's pots poured ahead (each in its well) — taken only at
+   *  START, so a closed page loses nothing. A bigger tray since (the MIXING TRAYS upgrade) starts the pre-pours over */
+  function loadFit() {
+    const t = SHOP.tableAt();
+    if (!P.load || P.loadOf !== G.S) { P.load = { order: [], pre: [], w: t.cols, h: t.rows }; P.preSel = null; P.wcur = -1; P.mixHist = null; P.loadOf = G.S; }   // (another save: a NEW game)
+    if (P.load.w !== t.cols || P.load.h !== t.rows) { P.load.pre = []; P.load.w = t.cols; P.load.h = t.rows; }
+    if (P.load.order.length > t.drops) P.load.order.length = t.drops;
+    // (review: what the dropper and the wells hold is checked against the jars and the rack every time — a pot used at the bench
+    //  meanwhile, a jar emptied: the LOAD shows only what START will really take)
+    const left = {}; P.load.order = P.load.order.filter((h) => { left[h] = (left[h] === undefined ? (G.S.drops && G.S.drops[h]) | 0 : left[h]) - 1; return left[h] >= 0; });
+    const have = {}; P.load.pre = P.load.pre.filter((q) => { const k = q.h + q.f; have[k] = (have[k] === undefined ? potsOf(q.h, q.f) : have[k]) - 1; return have[k] >= 0; });
+    if (P.preSel) { const m = /^(.*?)(\d)$/.exec(P.preSel); if (!m || potsOf(m[1], +m[2]) - prePoured(m[1], +m[2]) <= 0 || P.load.pre.length >= preMax()) { P.preSel = null; P.wcur = -1; } }
   }
-  /** MIX MY PIGMENTS: a session from your own drops (pigment packs): as many as the table's jar holds, the colour you have most
-   *  of first (a batch of one colour climbs highest: src/65_tray.js) */
-  function mixMine() {
-    const n = SHOP.tableAt().drops, pick = TRAY.pickBatch(G.S.drops, n), q = [];
-    for (const h in pick) for (let k = 0; k < pick[h]; k++) { q.push(h); G.S.drops[h]--; }
-    if (!q.length) { sfx('ui_back'); say(T('No pigments yet: a pigment pack brings some')); return; }
-    for (let i = q.length - 1; i > 0; i--) { const j = Math.floor(RNG.f() * (i + 1)); const t = q[i]; q[i] = q[j]; q[j] = t; }
-    startSession(q, 'mine', 0);
+  /** a save replaced (a NEW game, admin mode ON or OFF): the LOAD and the UNDO start over */
+  function resetLoad() { P.load = null; P.loadOf = null; P.preSel = null; P.wcur = -1; P.mixHist = null; }
+  const batchCap = () => SHOP.tableAt().drops, preMax = () => SHOP.tableAt().pre || 2;
+  const inDropper = (h) => { let n = 0; for (const x of P.load.order) if (x === h) n++; return n; };
+  /** the drops of h still in its jar beyond the dropper's */
+  const jarLeft = (h) => Math.max(0, ((G.S.drops && G.S.drops[h]) | 0) - inDropper(h));
+  const prePoured = (h, f) => P.load.pre.filter((q) => q.h === h && q.f === f).length;
+  const canStart = () => P.load.order.length + P.load.pre.length >= 2;
+  function addDrop(h) {
+    if (P.load.order.length >= batchCap()) { sfx('ui_back', { vol: 0.5 }); say(TF('The dropper holds {count} drops', { count: batchCap() })); return false; }
+    if (jarLeft(h) <= 0) { sfx('ui_back', { vol: 0.5 }); say(TF('No {colour} left: the + under its jar buys a sachet', { colour: inLine(T(HUE_NAME[h])) })); return false; }
+    P.load.order.push(h); sfx('ui_move', { vol: 0.5 }); return true;
+  }
+  function removeDrop() { if (P.load.order.pop()) sfx('ui_back', { vol: 0.5 }); }
+  function clearLoad() { P.load.order.length = 0; P.load.pre.length = 0; P.preSel = null; P.wcur = -1; sfx('ui_back'); }
+  /** MIX ALL: the dropper filled from the fullest jars (a batch of one colour climbs highest: src/65_tray.js), a drop of each in turn */
+  function mixAll() {
+    const pick = TRAY.pickBatch(G.S.drops || {}, batchCap()); P.load.order = [];
+    for (let k = 0; k < batchCap(); k++) { let any = false; for (const h of HUES) if (inDropper(h) < (pick[h] | 0) && P.load.order.length < batchCap()) { P.load.order.push(h); any = true; } if (!any) break; }
+    if (!P.load.order.length) { sfx('ui_back'); say(T('No pigments yet: the + under a jar buys a sachet')); return false; }
+    sfx('pour'); return true;
+  }
+  /** the + under a jar: a sachet of that colour (SHOP.SACHET drops) into its jar */
+  function buyPigment(h) {
+    const pr = SHOP.sachetPrice(h);
+    if (G.S.money < pr) { sfx('ui_back'); say(TF('A sachet of {colour} costs {money}', { colour: inLine(T(HUE_NAME[h])), money: fmtMoney(pr) })); return false; }
+    G.addMoney(-pr, 'pigment'); G.S.drops = G.S.drops || {}; G.S.drops[h] = (G.S.drops[h] | 0) + SHOP.SACHET; G.save(); sfx('pour'); return true;
+  }
+  /** YOUR RACK as its shelves show it: the Legendary paints first, then the rarest finish, then by colour → [{ h, f, leg, n, key }] */
+  function rackList() {
+    const legs = Object.keys(G.S.legs || {}).filter((id) => G.S.legs[id] > 0).map((id) => ({ h: 'leg', f: LEG_F, leg: id, n: G.S.legs[id], key: 'leg:' + id }));
+    const pots = potList().map((q) => ({ h: q.h, f: q.f, n: q.n, key: q.h + q.f })).sort((x, y) => y.f - x.f || ALLH.indexOf(x.h) - ALLH.indexOf(y.h));
+    return legs.concat(pots);
+  }
+  const rackPer = () => 24;   // (a page of bottles: 8 x 3)
+  /** PRE-POUR (Alex: "i can place jars directly to mix rarers ones"): a tap on a pot in YOUR RACK picks it (again: puts it back),
+   *  then a tap on an empty well pours it there; a tap on a pre-poured well puts it back. A Legendary paint never mixes again */
+  function rackPick(key) {
+    if (String(key).startsWith('leg:')) { sfx('ui_back'); say(T('A Legendary paint never mixes again')); return false; }
+    const m = /^(.*?)(\d)$/.exec(String(key)); if (!m) return false;
+    const h = m[1], f = +m[2];
+    if (P.preSel === key) { P.preSel = null; P.wcur = -1; sfx('ui_back'); return false; }
+    if (potsOf(h, f) - prePoured(h, f) <= 0) { sfx('ui_back'); say(T('None of that pot left')); return false; }
+    if (P.load.pre.length >= preMax()) { sfx('ui_back'); say(TF('A mix starts with {count} pots from the rack at most', { count: preMax() })); return false; }
+    P.preSel = key; P.wcur = firstFreeWell(); sfx('ui_select'); return true;   // (the RACK tab says what next, and the empty wells blink)
+  }
+  const preAt = (i) => P.load.pre.find((q) => q.at === i) || null;
+  function firstFreeWell() { const g = TG(); for (let i = 0; i < g.w * g.h; i++) if (!preAt(i)) return i; return -1; }
+  /** a well in the tray (LOAD): a pre-poured pot goes back to the rack; with a pot picked, an empty well takes it */
+  function wellTap(i) {
+    if (preAt(i)) { P.load.pre = P.load.pre.filter((q) => q.at !== i); sfx('ui_back'); return; }
+    if (!P.preSel) { sfx('ui_back', { vol: 0.4 }); say(T('Pick a pot in YOUR RACK first, then a well')); return; }
+    const m = /^(.*?)(\d)$/.exec(P.preSel); P.load.pre.push({ h: m[1], f: +m[2], at: i }); P.preSel = null; P.wcur = -1; sfx('pour');
+  }
+  /** the well under (x, y) in the tray, or -1 */
+  function wellAt(x, y) { const g = TG(); for (let i = 0; i < g.w * g.h; i++) { const [cx, cy] = cellXY(i); if (x >= cx && x < cx + g.cell && y >= cy && y < cy + g.cell) return i; } return -1; }
+  /** START: the drops leave their jars and the pots the rack; the dropper is shuffled (the luck in the tray), the pre-poured pots
+   *  stand in their wells and two drops fall on random empty ones. The mix is saved (G.S.mix): a reload goes on with it */
+  function startMix() {
+    loadFit();
+    if (!canStart()) { sfx('ui_back'); say(T('Two drops or pots at least: tap the jars, or a pot and a well')); return false; }
+    const t = SHOP.tableAt(), cells = new Array(t.cols * t.rows).fill(null), q = P.load.order.slice();
+    for (const h of q) G.S.drops[h] = (G.S.drops[h] | 0) - 1;   // (loadFit trimmed the dropper to what the jars hold)
+    for (const pp of P.load.pre) { if (pp.at >= cells.length || cells[pp.at] || potsOf(pp.h, pp.f) <= 0) continue; G.S.pots[pp.h + pp.f] = potsOf(pp.h, pp.f) - 1; cells[pp.at] = { h: pp.h, f: pp.f }; }
+    for (let i = q.length - 1; i > 0; i--) { const j = Math.floor(RNG.f() * (i + 1)), tt = q[i]; q[i] = q[j]; q[j] = tt; }
+    for (let n = 0; n < TRAY.START_DROPS && q.length; n++) { const e = []; cells.forEach((c, i) => { if (!c) e.push(i); }); if (!e.length) break; cells[e[Math.floor(RNG.f() * e.length)]] = { h: q.shift(), f: 0 }; }
+    G.S.mix = { cells, q, jar: 'mix', paid: 0, n: P.load.order.length, w: t.cols, h: t.rows, undo: 1 };
+    P.load = { order: [], pre: [], w: t.cols, h: t.rows }; P.preSel = null; P.wcur = -1; P.rackKey = false; P.mixHist = null; P.mixAnim = null; P.mixNext = null; P.bottleArm = 0; P.dis = 0; P.mixT = TIME;
+    G.save(); sfx('pour'); return true;
+  }
+  /** UNDO (one a mix, as in Tom's Tiny Armies): the tray and the dropper as they were before the last slide */
+  function undoMix() {
+    const M = G.S.mix; if (!M || !P.mixHist || P.mixHist.mix !== M || !((M.undo | 0) > 0)) { sfx('ui_back', { vol: 0.5 }); return false; }
+    M.cells = P.mixHist.cells; M.q = P.mixHist.q; M.undo = (M.undo | 0) - 1; P.mixHist = null; P.mixAnim = null; P.mixNext = null; G.save(); sfx('ui_back'); return true;
   }
   /** a PIGMENT PACK: five cards by rarity (SHOP.rollPig) — drops, ready pots, a Legendary recipe — into the game at once (a
    *  closed app keeps them), then dealt face down and turned over one by one */
@@ -10569,13 +10637,14 @@ const PROTO = {};
       return;
     }
     if (K.done < 0 && t - K.cards[K.cards.length - 1].at > PK_FLIP) K.done = t;
-    if (K.done >= 0 && t - K.done > 0.35 && tap) { IN.click = false; sfx('ui_select'); P.pg = null; P.mixTab = 'pig'; go('mix'); }
+    if (K.done >= 0 && t - K.done > 0.35 && tap) { IN.click = false; sfx('ui_select'); P.pg = null; P.mixTab = 'packs'; go('mix'); }
   }
   function pigGeom() { const n = P.pg ? P.pg.cards.length : SHOP.PIG.n, cw = 58, ch = 86, gap = 3; return { n, cw, ch, gap, x0: Math.round((W - n * cw - (n - 1) * gap) / 2), y0: VT + 18 }; }
   /** one slide of the tray: the pots move, merge and mix; the next drop falls in at the wall slid away from */
   function slideTray(dir) {
     const M = G.S.mix, r = TRAY.slide({ w: M.w || 4, h: M.h || 4, cells: M.cells }, dir, trayOpts());
     if (!r.moved) { sfx('ui_back', { vol: 0.35 }); return; }
+    if ((M.undo | 0) > 0) P.mixHist = { mix: M, cells: M.cells.slice(), q: M.q.slice() };   // (round 12: one UNDO a mix, as in TTA — the tray before this slide; its mix's own)
     const from = M.cells.slice(); M.cells = r.board.cells; let spawn = -1;
     if (M.q.length) { const sc = TRAY.spawnCells(r.board, dir); if (sc.length) { spawn = sc[Math.floor(RNG.f() * sc.length)]; M.cells[spawn] = { h: M.q.shift(), f: 0 }; } }
     P.mixAnim = { t: 0, moves: r.moves, from, spawn };
@@ -10583,102 +10652,72 @@ const PROTO = {};
     sfx(r.fused.length ? 'legendary_chime' : r.mixes ? 'mix_swirl' : r.merges.length ? 'merge' : 'slide', { vol: 0.8 });
     G.save();
   }
-  /** bottle the tray: its Satin+ pots go into the rack (Legendaries to their shelf); the Matte drops are spent; the drops still
-   *  in the dropper go back (a jar's: their share of its price; your own pigments: back to YOUR PIGMENTS). With drops left it
-   *  asks first (a second tap) */
+  /** BOTTLE: every Satin+ pot into YOUR RACK (a Legendary paint to its shelf); the Matte drops and the ones still in the dropper
+   *  back to their jars — nothing is lost (TTA's rule; an older save's jar mix too: its drops come back as pigments). With drops
+   *  still in the dropper it asks first (a second tap) */
   function bottleTray() {
-    const M = G.S.mix, mine = M.jar === 'mine', n0 = M.n || 16;
-    if (M.q.length && !P.bottleArm) { P.bottleArm = TIME; sfx('ui_move'); say(mine ? TF('{count} drops still in the dropper: BOTTLE again to stop (they go back to your pigments)', { count: M.q.length }) : TF('{count} drops still in the dropper: BOTTLE again to stop (they go back, {money})', { count: M.q.length, money: fmtMoney(Math.round((M.paid || 0) * M.q.length / n0)) })); return; }
+    const M = G.S.mix;
+    const more = TRAY.canMerge({ w: M.w || 4, h: M.h || 4, cells: M.cells }, trayOpts());
+    if ((M.q.length || more) && !P.bottleArm) {   // (TTA's SURE?: drops still to fall, or pots that can still climb)
+      P.bottleArm = TIME; sfx('ui_move');
+      say(M.q.length ? TF(M.q.length === 1 ? '{count} drop still in the dropper: BOTTLE again to stop (it goes back to its jar)' : '{count} drops still in the dropper: BOTTLE again to stop (they go back to their jars)', { count: M.q.length }) : T('The tray can still climb: BOTTLE again to stop'));
+      return;
+    }
     P.bottleArm = 0;
-    if (M.q.length) { if (mine) for (const h of M.q) G.S.drops[h] = (G.S.drops[h] | 0) + 1; else if (M.paid) G.addMoney(Math.round(M.paid * M.q.length / n0), 'pigment'); }
-    const b = TRAY.bottle({ w: M.w || 4, h: M.h || 4, cells: M.cells }, []);
+    const b = TRAY.bottle({ w: M.w || 4, h: M.h || 4, cells: M.cells }, M.q);
     for (const p of b.pots) { if (p.f >= TRAY.LEG) G.S.legs[p.leg] = (G.S.legs[p.leg] | 0) + 1; else G.S.pots[p.h + p.f] = potsOf(p.h, p.f) + 1; }
-    P.bottled = { pots: b.pots, t: 0 }; G.S.mix = null; P.rackGhost = null; G.save();
+    G.S.drops = G.S.drops || {}; for (const h in b.back) G.S.drops[h] = (G.S.drops[h] | 0) + b.back[h];
+    P.bottled = { pots: b.pots, back: b.backN, t: 0 }; G.S.mix = null; P.mixHist = null; G.save();
     sfx(b.pots.length ? 'pour' : 'ui_back'); if (b.pots.some((p) => p.f >= 3)) sfx('sparkle');
   }
   const overTray = (x, y) => { const g = TG(); return x >= g.x && x < g.x + g.tw && y >= g.y && y < g.y + g.th; };
-  const MIX_TABS = ['jars', 'pig', 'rack', 'book'];
-  /** the JARS tab's tiles (after M6, Alex: "maybe first just show colors, if i click on a color i can select the options to
-   *  buy"): the primaries, then the eight colours. A tile's jars (SHOP.JARS): the primaries' own; a colour's ONE COLOUR and its
-   *  TINT and SHADE (not white's or black's: those two tint and shade a colour) */
-  const JAR_TILES = ['prim'].concat(HUES);
-  const tileJars = (t) => (t === 'prim' ? [0] : t === 'W' || t === 'K' ? [1] : [1, 2, 3]);
-  function openTile(t) { P.jarOpen = t; P.jarOpt = 0; P.jarT = TIME; if (t !== 'prim') P.mixHue = HUES.indexOf(t); sfx('ui_select'); }   // (jarT: the review's double tap — the prices appear under the finger)
-  /** YOUR RACK as its shelves show it: the Legendary paints first, then the rarest finish, then by colour → [{ h, f, leg, n, key }] */
-  function rackList() {
-    const legs = Object.keys(G.S.legs || {}).filter((id) => G.S.legs[id] > 0).map((id) => ({ h: 'leg', f: LEG_F, leg: id, n: G.S.legs[id], key: 'leg:' + id }));
-    const pots = potList().map((q) => ({ h: q.h, f: q.f, n: q.n, key: q.h + q.f })), have = new Set(pots.map((q) => q.key));
-    // a pot poured to its last keeps its place, empty, until BOTTLE or leaving the table: the shelves never shift under the finger
-    // (the next tap there says none is left, instead of pouring the pot that slid into its spot)
-    for (const k of P.rackGhost || []) { const m = /^(.*?)(\d)$/.exec(k); if (m && !have.has(k)) pots.push({ h: m[1], f: +m[2], n: 0, key: k }); }
-    pots.sort((x, y) => y.f - x.f || ALLH.indexOf(x.h) - ALLH.indexOf(y.h));
-    return legs.concat(pots);
-  }
-  const rackPer = () => 24;   // (a page of bottles: 8 x 3, in the RACK tab and while mixing — the same shelves, in the same place)
-  /** a pot from YOUR RACK into the tray (after M6, Alex: "its not possible to mix finalized from my rack into rarer colors"): it
-   *  lands in the first empty well (reading order: two poured one after the other lie side by side) as the pot it is, and merges,
-   *  mixes and fuses like any (two Pearls of a recipe: a Legendary paint). No mix going: one starts from the rack (nothing in the
-   *  dropper, nothing paid); BOTTLE puts back whatever is in the tray. A Legendary paint never mixes again; a full tray takes none */
-  function rackToTray(key) {
-    if (String(key).startsWith('leg:')) { sfx('ui_back'); say(T('A Legendary paint never mixes again')); return false; }
-    const m = /^(.*?)(\d)$/.exec(String(key)); if (!m) return false;
-    const h = m[1], f = +m[2]; if (f < 1 || f >= LEG_F) return false;
-    if (potsOf(h, f) <= 0) { sfx('ui_back'); say(T('None of that pot left')); return false; }
-    if (!mixOn()) { const t = SHOP.tableAt(); G.S.mix = { cells: new Array(t.cols * t.rows).fill(null), q: [], jar: 'rack', paid: 0, n: 0, w: t.cols, h: t.rows }; P.dis = 0; P.bottleArm = 0; P.mixAnim = null; P.mixNext = null; }
-    const M = G.S.mix, i = M.cells.findIndex((c) => !c);
-    if (i < 0) { sfx('ui_back'); say(T('No empty well: slide or bottle first')); return false; }
-    M.cells[i] = { h, f }; G.S.pots[h + f] = potsOf(h, f) - 1; (P.rackGhost || (P.rackGhost = new Set())).add(h + f);   // (no label pops up: two poured side by side would print over each other)
-    sfx('pour'); G.save(); return true;
+  /** LOAD's input: the tabs (Tab), the verbs (CLEAR · MIX ALL · START), the jars (a tap, held, 1-8; their + and Shift+1-8 buy a
+   *  sachet; Backspace), the rack and the wells (a pre-pour: by taps, or the arrows and ENTER), the packs */
+  function updLoad(b) {
+    loadFit();
+    if (P.preSel && (IN.pressed('cancel') || IN.keyPressed('Backspace'))) { P.preSel = null; P.wcur = -1; sfx('ui_back'); return; }   // (a picked pot: put back first)
+    if (IN.keyPressed('Backspace') && P.load.order.length) { removeDrop(); return; }   // (the dropper's last drop back, before Backspace's own "back")
+    if (IN.pressed('cancel') || b === 'room') { toRoom(); return; }
+    if (b && b.startsWith('mt')) { P.mixTab = MIX_TABS[+b.slice(2)] || 'pig'; sfx('page'); return; }
+    if (IN.keyPressed('Tab')) { P.mixTab = MIX_TABS[(MIX_TABS.indexOf(P.mixTab) + 1) % MIX_TABS.length]; sfx('page'); return; }
+    if (b === 'clear') { clearLoad(); return; }
+    if (b === 'all' || (IN.keyPressed('KeyA') && !P.preSel && !(P.mixTab === 'rack' && P.rackKey))) { mixAll(); return; }   // (A is also ◀ here: not while a cursor is out)
+    if (b === 'start') { startMix(); return; }
+    if (b && b.startsWith('pj:')) { const h = b.slice(3); if (addDrop(h)) { P.jarHold = h; P.jarHoldT = 0; } return; }
+    if (b && b.startsWith('pb:')) { buyPigment(b.slice(3)); return; }
+    if (P.jarHold) { if (IN.mdown) { if (++P.jarHoldT > 20 && P.jarHoldT % 5 === 0) addDrop(P.jarHold); } else P.jarHold = null; }   // (a jar held: a drop after another)
+    for (let i = 0; i < HUES.length; i++) if (IN.keyPressed('Digit' + (i + 1)) || IN.keyPressed('Numpad' + (i + 1))) { if (IN.down('run')) buyPigment(HUES[i]); else addDrop(HUES[i]); return; }
+    if (b && b.startsWith('rk:')) { P.rackKey = false; rackPick(b.slice(3)); return; }
+    if (b === 'rk<' || b === 'rk>') { const pages = Math.max(1, Math.ceil(rackList().length / rackPer())); P.rackPg = ((P.rackPg | 0) + (b === 'rk<' ? pages - 1 : 1)) % pages; if (P.rackKey) P.rackSel = P.rackPg * rackPer(); sfx('page'); return; }
+    if (IN.click && overTray(IN.mx, IN.my)) { const i = wellAt(IN.mx, IN.my); IN.click = false; if (i >= 0) wellTap(i); return; }
+    const dx = IN.pressed('left') ? -1 : IN.pressed('right') ? 1 : 0, dy = IN.pressed('up') ? -1 : IN.pressed('down') ? 1 : 0;
+    if (P.preSel) {   // a pot picked by keys: the arrows choose a well, ENTER pours it there
+      const g = TG(); if (P.wcur < 0) P.wcur = firstFreeWell();
+      if (dx || dy) { const x = clamp((P.wcur % g.w) + dx, 0, g.w - 1), y = clamp(((P.wcur / g.w) | 0) + dy, 0, g.h - 1); P.wcur = y * g.w + x; sfx('ui_move'); return; }
+      if (IN.pressed('confirm') && P.wcur >= 0) { wellTap(P.wcur); P.rackKey = false; return; }   // (poured: the next ENTER STARTs)
+    }
+    if (P.mixTab === 'rack') {   // the keys on YOUR RACK: the arrows choose a pot, ENTER picks it
+      const L = rackList();
+      if (L.length && (dx || dy)) { P.rackSel = P.rackKey ? clamp((P.rackSel | 0) + dx + dy * 8, 0, L.length - 1) : 0; P.rackKey = true; P.rackPg = Math.floor(P.rackSel / rackPer()); sfx('ui_move'); return; }
+      if (L.length && P.rackKey && IN.pressed('confirm')) { const e = L[clamp(P.rackSel | 0, 0, L.length - 1)];   // (review: a pot that can't be picked, with the mix ready: ENTER STARTs)
+        if (!(canStart() && (e.f >= LEG_F || P.load.pre.length >= preMax() || potsOf(e.h, e.f) - prePoured(e.h, e.f) <= 0))) { rackPick(e.key); return; } }
+    }
+    if (P.mixTab === 'packs' && (b === 'pigbuy' || (IN.pressed('confirm') && !canStart()))) { buyPig(); return; }   // (ENTER buys a pack here, while the dropper can't start)
+    if (IN.pressed('confirm')) { if (!P.load.order.length && !P.load.pre.length && SHOP.dropsHeld()) mixAll(); else startMix(); }   // (TTA: ENTER on an empty dropper fills it first)
   }
   function updMix() {
     P.dis = Math.min(1, P.dis + TICK * 3);
     if (P.mixAnim) { P.mixAnim.t += TICK; if (P.mixAnim.t > 0.13) P.mixAnim = null; }
     const b = hitBtn();
-    // a colour's jars: Esc and ◀ go back to the colours (not out of the table)
-    if (!mixOn() && !P.bottled && P.mixTab === 'jars' && P.jarOpen && (IN.pressed('cancel') || b === 'jback')) { P.jarOpen = null; P.jarOpt = 0; sfx('ui_back'); return; }
-    if (mixOn() && P.rackFocus && (IN.pressed('cancel') || IN.keyPressed('Tab'))) { P.rackFocus = false; sfx('ui_back'); return; }
-    if (IN.pressed('cancel') || b === 'room') { toRoom(); return; }
-    if (P.bottled) { P.bottled.t += TICK; if (P.bottled.t > 0.4 && (b === 'okb' || IN.pressed('confirm') || IN.click)) { IN.click = false; P.bottled = null; sfx('ui_select'); } return; }
-    // YOUR RACK (its tab, or while mixing: the same shelves): a tap pours that pot into the tray; ◀ ▶ turn its pages
-    if (b && b.startsWith('rk:')) { if (mixOn() && TIME - (P.mixT || -9) < 0.4) return; P.rackKey = false; rackToTray(b.slice(3)); return; }   // (a jar's double tap: not into the rack under it)
-    if (b === 'rk<' || b === 'rk>') { const pages = Math.max(1, Math.ceil(rackList().length / rackPer())); P.rackPg = ((P.rackPg | 0) + (b === 'rk<' ? pages - 1 : 1)) % pages; if (P.rackKey || P.rackFocus) P.rackSel = P.rackPg * rackPer(); sfx('page'); return; }   // (the keys' bottle comes along to the page shown)
-    if (!mixOn()) {   // the four tabs (keys: Tab; JARS: the arrows choose a colour, ENTER shows its jars, 1-3 buy one, ◀ / Esc back; PIGMENTS: ENTER mixes yours, 1 buys a pack; RACK: the arrows and ENTER)
-      if (b && b.startsWith('mt')) { P.mixTab = MIX_TABS[+b.slice(2)] || 'jars'; sfx('page'); return; }
-      if (IN.keyPressed('Tab')) { P.mixTab = MIX_TABS[(MIX_TABS.indexOf(P.mixTab) + 1) % MIX_TABS.length]; sfx('page'); return; }
-      if (P.mixTab === 'pig') { if (b === 'mine' || IN.pressed('confirm')) mixMine(); else if (b === 'pigbuy' || IN.keyPressed('Digit1')) buyPig(); return; }   // (keys: ENTER mixes yours, 1 buys a pack — M mutes the game)
-      if (P.mixTab === 'book') return;
-      const dx = IN.pressed('left') ? -1 : IN.pressed('right') ? 1 : 0, dy = IN.pressed('up') ? -1 : IN.pressed('down') ? 1 : 0;
-      if (P.mixTab === 'rack') {
-        const L = rackList(); if (!L.length) return;
-        if (dx || dy) { P.rackSel = P.rackKey ? clamp((P.rackSel | 0) + dx + dy * 8, 0, L.length - 1) : 0; P.rackKey = true; P.rackPg = Math.floor(P.rackSel / rackPer()); sfx('ui_move'); return; }
-        if (IN.pressed('confirm') && P.rackKey) rackToTray(L[clamp(P.rackSel | 0, 0, L.length - 1)].key);
-        return;
-      }
-      if (!P.jarOpen) {   // JARS, the colours: a tap (or the arrows and ENTER) shows that colour's jars
-        if (b && b.startsWith('jt:')) { P.jarKey = false; openTile(b.slice(3)); return; }
-        if (dx || dy) { P.jarSel = P.jarKey ? clamp((P.jarSel | 0) + dx + dy * 3, 0, JAR_TILES.length - 1) : 0; P.jarKey = true; sfx('ui_move'); return; }
-        if (IN.pressed('confirm') && P.jarKey) openTile(JAR_TILES[clamp(P.jarSel | 0, 0, JAR_TILES.length - 1)]);
-        return;
-      }
-      const js = tileJars(P.jarOpen);   // a colour's jars: a tap on a price buys it (1-3, or ▲ ▼ and ENTER); ◀ goes back
-      if (b && b.startsWith('jar')) { if (TIME - (P.jarT || -9) >= 0.35) buyJar(+b.slice(3)); return; }
-      for (let i = 0; i < js.length; i++) if (IN.keyPressed('Digit' + (i + 1))) { buyJar(js[i]); return; }
-      if (dy) { P.jarOpt = clamp((P.jarOpt | 0) + dy, 0, js.length - 1); P.jarKey = true; sfx('ui_move'); return; }
-      if (dx < 0) { P.jarOpen = null; P.jarOpt = 0; sfx('ui_back'); return; }
-      if (IN.pressed('confirm')) { if (P.jarKey) buyJar(js[clamp(P.jarOpt | 0, 0, js.length - 1)]); else { P.jarKey = true; sfx('ui_move'); } }   // (nothing ringed yet: the first ENTER shows the ring)
+    if (P.bottled) {   // BOTTLED: AGAIN (or ENTER) loads the next mix; DONE (or Esc) leaves the table
+      P.bottled.t += TICK;
+      if (IN.pressed('cancel') || b === 'room' || (b === 'done' && P.bottled.t > 0.4)) { P.bottled = null; toRoom(); return; }
+      if (P.bottled.t > 0.4 && (b === 'again' || IN.pressed('confirm'))) { IN.click = false; P.bottled = null; sfx('ui_select'); }
       return;
     }
-    if (!P.rackFocus && IN.keyPressed('Tab') && rackList().length) { const L = rackList(); P.rackFocus = true; P.rackSel = clamp(P.rackSel | 0, 0, L.length - 1); P.rackPg = Math.floor(P.rackSel / rackPer()); sfx('ui_move'); return; }
-    if (P.rackFocus && ((b && b.startsWith('sl')) || (IN.click && overTray(IN.mx, IN.my)))) P.rackFocus = false;   // (a tap on the tray or its arrows: back to the tray)
-    if (P.rackFocus) {   // the keys on YOUR RACK (review: a keyboard could pour only one pot): the arrows choose, ENTER pours
-      const L = rackList(); if (!L.length) { P.rackFocus = false; return; }
-      const dx = IN.pressed('left') ? -1 : IN.pressed('right') ? 1 : 0, dy = IN.pressed('up') ? -1 : IN.pressed('down') ? 1 : 0;
-      if (dx || dy) { P.rackSel = clamp((P.rackSel | 0) + dx + dy * 8, 0, L.length - 1); P.rackPg = Math.floor(P.rackSel / rackPer()); sfx('ui_move'); }
-      else if (IN.pressed('confirm')) rackToTray(L[clamp(P.rackSel | 0, 0, L.length - 1)].key);
-      if (P.bottleArm && TIME - P.bottleArm > 3) P.bottleArm = 0;
-      if (b === 'bottle' || IN.keyPressed('KeyB')) bottleTray();
-      return;
-    }
+    if (!mixOn()) { updLoad(b); return; }
+    if (IN.pressed('cancel') || b === 'room') { toRoom(); return; }   // (the mix waits for you: G.S.mix)
+    if (b === 'undo' || IN.keyPressed('KeyU') || IN.keyPressed('KeyZ')) { undoMix(); return; }
     let dir = null;   // a slide: the arrows, a swipe on the tray (10 px), the buttons
     for (const d of ['left', 'right', 'up', 'down']) if (IN.pressed(d)) dir = d;
     if (b && b.startsWith('sl')) dir = b.slice(2);
@@ -10691,7 +10730,7 @@ const PROTO = {};
     if (dir) { if (P.mixAnim) P.mixNext = dir; else slideTray(dir); }   // (a slide during the last one's animation waits its turn)
     if (!dir && !P.mixAnim && P.mixNext) { const d = P.mixNext; P.mixNext = null; slideTray(d); }
     if (P.bottleArm && TIME - P.bottleArm > 3) P.bottleArm = 0;
-    if (b === 'bottle' || (IN.keyPressed('KeyB'))) bottleTray();
+    if ((b === 'bottle' || IN.keyPressed('KeyB')) && TIME - (P.mixT || -9) >= 0.4) bottleTray();   // (review: START's double tap — BOTTLE sits on its spot — never bottles the mix it just started)
   }
 
   // ---- THE DISPLAY SHELF: your best pieces on three shelves (five each). Uncommon, rare and epic pieces carry a BOOST (COINS,
@@ -10914,15 +10953,13 @@ const PROTO = {};
   }
   /** a paint pot in a tray well (or the rack): a round drop of its colour, its finish in the light — Satin a soft highlight,
    *  Metallic a bright streak, Pearl a sheen of its flip colour, Starlight a twinkle; a Legendary rings in gold */
-  // ---- the mixing table's look after M6 (Alex: "their rarity is also not clear if i mix"; the rack "show[s] as pigments, not
-  //      bottles"): a finish's RARITY COLOUR, as the figures' rarities — Satin green (uncommon), Metallic blue (rare), Pearl
-  //      purple (epic), Starlight gold, a Legendary paint orange — on a drop's ring and a bottle's glass, with its pips
-  const FIN_COL = [null, 'G6', 'B6', 'V6', 'Y5'];
-  const finCol = (f) => (f >= LEG_F ? C.O5 : FIN_COL[f] ? C[FIN_COL[f]] : null);
-  /** a finish's pips on a dark pill, its top row at y: Satin •, Metallic ••, Pearl •••, Starlight ★ (cream dots, a gold star) */
+  // ---- the mixing table's look (round 11: Alex, "their rarity is also not clear if i mix"; the rack "show[s] as pigments, not
+  //      bottles". Round 12: "for finalized colors just use the . .. ... * as indication, no color highlights"): a finished
+  //      colour's finish shows by its PIPS alone — Satin •, Metallic ••, Pearl •••, Starlight ★ — on a drop and on a bottle's label
+  /** a finish's pips on a dark pill, its top row at y: Satin •, Metallic ••, Pearl •••, Starlight ★ (cream, as everything else) */
   function finPips(cx, y, f) {
-    if (!finCol(f) || f >= LEG_F) return;
-    const col = f >= 4 ? C.Y7 : C.CRM2;   // (cream dots, a gold star: the ring beside the pill is the rarity colour — review: same-coloured pips and ring ends read as more pips)
+    if (!(f >= 1) || f >= LEG_F) return;
+    const col = C.CRM2;
     if (f >= 4) { rect(cx - 3, y - 1, 7, 6, C.UI0); pset(cx, y, col); rect(cx - 2, y + 1, 5, 1, col); rect(cx - 1, y + 2, 3, 1, col); pset(cx - 1, y + 3, col); pset(cx + 1, y + 3, col); return; }
     const w = 3 * f - 1, x0 = cx - (w >> 1);
     rect(x0 - 1, y - 1, w + 2, 4, C.UI0); for (let k = 0; k < f; k++) rect(x0 + k * 3, y, 2, 2, col);
@@ -10931,8 +10968,8 @@ const PROTO = {};
   function sprite(rows, x0, y0, col) {
     for (let y = 0; y < rows.length; y++) { const r = rows[y]; for (let x = 0; x < r.length; x++) { const k = r[x]; if (k === '.') continue; const c = col(k, x, y); if (c !== undefined && c !== null) pset(x0 + x, y0 + y, c); } }
   }
-  /** a POT as a BOTTLE: a cork, its colour inside, the glass in the finish's rarity colour, a cream label with the finish's pips
-   *  (a Legendary paint: a gold cork, its two colours, an orange label, a glow). 's' 9 x 13 (the rack), 'm' 13 x 18 (BOTTLED!):
+  /** a POT as a BOTTLE: a cork, its colour inside, dark glass, a cream label with the finish's pips (a Legendary paint: a gold
+   *  cork, its two colours, a gold label, a glow). 's' 9 x 13 (the rack), 'm' 13 x 18 (BOTTLED!):
    *  c cork · o glass · G its shine · l the colour · L its shadow · b the label (lab: its first row; pip / star: where the marks go) */
   const BOTTLE = {
     s: { rows: ['...ccc...', '...ccc...', '...oGo...', '..oGllo..', '.oGllllo.', 'oGlllllLo', 'obbbbbbbo', 'obbbbbbbo', 'oGlllllLo', 'oGllllLLo', 'olllllLLo', '.oLLLLLo.', '..ooooo..'],
@@ -10944,10 +10981,10 @@ const PROTO = {};
   function drawBottle(cx, by, p, size) {
     const B = BOTTLE[size === 'm' ? 'm' : 's'], rows = B.rows, w = rows[0].length, h = rows.length, x0 = cx - (w >> 1), y0 = by - h + 1, big = size === 'm';
     const leg = p.f >= LEG_F, hs = leg ? (LEG_LOOK[p.leg || p.h] || ['Y', 'O']) : [p.h], rp = RAMP[hs[0]] || RAMP.R, n = rp.length, r2 = leg ? (RAMP[hs[1]] || rp) : rp;
-    const glass = finCol(p.f) || C.UI4, lit = rp[n - 1], mid = rp[Math.floor(n * 0.6)], low = rp[Math.floor(n * 0.3)];
+    const glass = C.UI0, lit = rp[n - 1], mid = rp[Math.floor(n * 0.6)], low = rp[Math.floor(n * 0.3)];   // (round 12: dark glass — the label's pips tell the finish)
     if (leg) HD.bandGlow(cx, by - (h >> 1), w * 0.7, h * 0.6, 1);
     sprite(rows, x0, y0, (k, x, y) => (k === 'o' ? glass : k === 'c' ? (leg ? (y ? C.Y5 : C.Y6) : y ? C.WOD4 : C.WOD5) : k === 'G' ? lit : k === 'L' ? low
-      : k === 'b' ? (leg ? C.O5 : C.CRM2) : leg && (x + y) % 3 === 0 ? r2[Math.max(0, r2.length - 3)] : mid));
+      : k === 'b' ? (leg ? C.Y5 : C.CRM2) : leg && (x + y) % 3 === 0 ? r2[Math.max(0, r2.length - 3)] : mid));
     const ly = y0 + B.lab, m1 = big ? 1 : 0;   // the label: the pips on its middle row (the small bottle's: both rows)
     if (p.f >= 1 && p.f <= 3) for (const q of B.pip[p.f - 1]) { pset(x0 + q, ly + m1, C.UI0); if (!big) pset(x0 + q, ly + 1, C.UI0); }
     else if (p.f === 4) { const sx = x0 + B.star; pset(sx, ly, C.UI0); pset(sx - 1, ly + 1, C.UI0); pset(sx + 1, ly + 1, C.UI0); if (big) { pset(sx, ly + 1, C.UI0); pset(sx, ly + 2, C.UI0); } }
@@ -10974,9 +11011,9 @@ const PROTO = {};
     if (p.f >= 2) { line(cx - 5, cy + 2, cx + 1, cy - 5, rp[n - 1]); }
     if (p.f === 3) { const fl = RAMP[HD.PEARL_FLIP[p.h]] || rp; ell(cx, cy + 1, r - 3, Math.max(1, (r >> 2)), fl[fl.length - 3]); }
     if (p.f === 4 && Math.sin(TIME * 4 + cx) > 0) { pset(cx + 3, cy - 2, C.LIT3); pset(cx + 2, cy - 2, C.Y7); pset(cx + 4, cy - 2, C.Y7); pset(cx + 3, cy - 3, C.Y7); pset(cx + 3, cy - 1, C.Y7); }
-    // the finish's rarity colour as its ring (two pixels on a bigger drop), its pips on a pill at the bottom (after M6)
-    const fc = finCol(p.f); circ(cx, cy, r, fc || rp[1]); if (fc && r >= 6) circ(cx, cy, r - 1, fc);
-    if (fc && r >= 7) finPips(cx, cy + r - 2, p.f);
+    // the ring in its own colour (a Legendary paint's gold), the finish's pips on a pill at the bottom (round 12: no colour highlights)
+    circ(cx, cy, r, leg ? C.Y6 : rp[1]);
+    if (r >= 7 && p.f >= 1 && !leg) finPips(cx, cy + r - 2, p.f);
   }
   /** M6: the emblems of the newer themes, 7 x 6 (a letter per colour, '.' clear). They are drawn on paper (an order's THEME
    *  line, a letter): inks dark enough for it (M6 review: a pale skull, a yellow anchor and star vanished on the cream) */
@@ -11148,9 +11185,9 @@ const PROTO = {};
       if (k >= 1) { textO(P.inst.title, W >> 1, y + 6, C.UI1, C.PAP4, FONT_M, 1, 1); textO(P.inst.line, W >> 1, y + 18, C.UI2, C.PAP4, FONT_S, 1, 1); }
     }
   }
-  /** the mixing table: the tray on the left; on the right, before a mix, four tabs (JARS: the colours, then a colour's jars;
-   *  PIGMENTS; RACK: your pots as bottles on shelves; RECIPES); while mixing, the dropper and YOUR RACK to pour in; after it, what
-   *  you bottled. A finish shows its rarity colour throughout (finCol: a drop's ring and pips, a bottle's glass) */
+  /** the mixing table: the tray on the left; on the right, while LOADING four tabs (PIGMENTS: the eight jars, their +, the dropper;
+   *  RACK: your pots, to pre-pour; PACKS; RECIPES), while MIXING the dropper's next drops, the best so far and the rules, after
+   *  BOTTLE what you bottled. The bottom band: CLEAR · MIX ALL · START / the slide arrows · UNDO · BOTTLE / AGAIN · DONE */
   function drawMixUI() {
     remapRect(0, VT, W, VB - VT, DARK[2]);
     const g = TG(), M = G.S.mix, A = P.mixAnim, half = g.cell >> 1;
@@ -11160,10 +11197,20 @@ const PROTO = {};
       if (A) { const k = EASE.outCubic(clamp(A.t / 0.13, 0, 1)); for (const m of A.moves) { const p = A.from[m.from]; if (!p) continue; const [x0, y0] = cellXY(m.from), [x1, y1] = cellXY(m.to); drawPot(Math.round(lerp(x0, x1, k)) + half, Math.round(lerp(y0, y1, k)) + half, p, g.r); } }   // (every pot is in moves; the new drop shows after)
       else M.cells.forEach((p, i) => { if (p) { const [x, y] = cellXY(i); drawPot(x + half, y + half, p, g.r); } });
       if (P.swipe) { const dx = IN.mx - P.swipe.x, dy = IN.my - P.swipe.y; if (Math.hypot(dx, dy) > 3) line(P.swipe.x, P.swipe.y, IN.mx, IN.my, C.CRM0); }
-    } else if (!P.bottled) { const cy = g.y + (g.th >> 1), bw = Math.min(g.tw - 4, Math.max(g.tw - 16, textW(T('OR MIX POTS FROM YOUR RACK'), FONT_S) + 10)); remapRect(g.x + ((g.tw - bw) >> 1), cy - 12, bw, 22, DARK[3]); textO(T('BUY A JAR TO MIX'), g.x + (g.tw >> 1), cy - 8, C.CRM1, C.UI0, FONT_S, 1, 1); textO(T('OR MIX POTS FROM YOUR RACK'), g.x + (g.tw >> 1), cy, C.CRM0, C.UI0, FONT_S, 1, 1); }
+    } else if (!P.bottled) {   // LOADING: the pre-poured pots in their wells; with a pot picked, the empty wells blink for it
+      const L = P.load || { order: [], pre: [] };
+      for (const pp of L.pre) { const [x, y] = cellXY(pp.at); drawPot(x + half, y + half, { h: pp.h, f: pp.f }, g.r); }
+      if (P.preSel) { for (let i = 0; i < g.w * g.h; i++) { if (preAt(i)) continue; const [x, y] = cellXY(i); if (i === P.wcur) circ(x + half, y + half, half - 1, C.Y7); else if (((TIME * 3) | 0) % 2) circ(x + half, y + half, half - 1, C.CRM1); } }
+      else if (!L.pre.length && !L.order.length && (P.mixTab === 'pig' || P.mixTab === 'rack')) {
+        const cy = g.y + (g.th >> 1), has = SHOP.dropsHeld() > 0, rk = P.mixTab === 'rack';
+        const l1 = rk ? T('A POT FROM YOUR RACK ▶') : has ? T('TAP THE JARS: THEIR DROPS') : T('BUY PIGMENTS: THE +'), l2 = rk ? T('THEN A WELL HERE') : has ? T('GO INTO THE DROPPER ▶') : T('UNDER A JAR ▶');
+        const bw = Math.min(g.tw - 4, Math.max(g.tw - 16, Math.max(textW(l1, FONT_S), textW(l2, FONT_S)) + 10)); remapRect(g.x + ((g.tw - bw) >> 1), cy - 12, bw, 22, DARK[3]);
+        textO(l1, g.x + (g.tw >> 1), cy - 8, C.CRM1, C.UI0, FONT_S, 1, 1); textO(l2, g.x + (g.tw >> 1), cy, C.CRM0, C.UI0, FONT_S, 1, 1);
+      }
+    }
     const px = 156, pw = W - px - 4;
-    if (P.bottled) {   // what the tray gave, as bottles: under each its finish, in the finish's rarity colour
-      panel(px, VT + 4, pw, 104, T('BOTTLED!'));
+    if (P.bottled) {   // what the tray gave, as bottles: under each its finish (a Legendary paint: its name), and the drops that went back
+      panel(px, VT + 4, pw, 114, T('BOTTLED!'));
       const pots = P.bottled.pots; if (!pots.length) textO(T('ONLY MATTE DROPS: NOTHING TO BOTTLE'), px + (pw >> 1), VT + 40, C.CRM0, C.UI0, FONT_S, 1, 1);
       const shown = pots.slice(0, 8), lab = shown.map((p) => TRAY.potLabel(p).replace(' · ', '\n').split('\n')[p.f >= 5 ? 0 : 1].toUpperCase()), lw = lab.map((s) => textW(s, FONT_S));
       // each label under its pot, kept inside the panel's frame. Two neighbours closer than 4 px would read as one word
@@ -11178,88 +11225,77 @@ const PROTO = {};
         for (let i = 1; i < ks.length; i++) lx[ks[i]] = Math.max(lx[ks[i]], lx[ks[i - 1]] + gap(ks[i - 1], ks[i]));
         for (let i = ks.length - 1; i >= 0; i--) lx[ks[i]] = Math.min(lx[ks[i]], i === ks.length - 1 ? x1 - lw[ks[i]] / 2 : lx[ks[i + 1]] - gap(ks[i], ks[i + 1]));
       }
-      shown.forEach((p, k) => { const [x, y] = at(k); drawBottle(x, y, p, 'm'); if (!low[k]) textO(lab[k], Math.round(lx[k]), y + 3, finCol(p.f) || C.CRM1, C.UI0, FONT_S, 1, 1); });
-      shown.forEach((p, k) => { if (low[k]) textO(lab[k], Math.round(lx[k]), at(k)[1] + 10, finCol(p.f) || C.CRM1, C.UI0, FONT_S, 1, 1); });
+      shown.forEach((p, k) => { const [x, y] = at(k); drawBottle(x, y, p, 'm'); if (!low[k]) textO(lab[k], Math.round(lx[k]), y + 3, p.f >= LEG_F ? C.Y6 : C.CRM1, C.UI0, FONT_S, 1, 1); });
+      shown.forEach((p, k) => { if (low[k]) textO(lab[k], Math.round(lx[k]), at(k)[1] + 10, p.f >= LEG_F ? C.Y6 : C.CRM1, C.UI0, FONT_S, 1, 1); });
       if (pots.length > 8) textO(TF('+{count} MORE', { count: pots.length - 8 }), px + pw - 6, VT + 98, C.CRM0, C.UI0, FONT_S, 1, 2);
-    } else if (!M) {   // before a mix: four tabs — JARS, PIGMENTS (yours + packs), RACK (your pots), RECIPES (the Legendary paints you know)
+      if (P.bottled.back) textO(TF(P.bottled.back === 1 ? '{count} DROP WENT BACK INTO ITS JAR' : '{count} DROPS WENT BACK INTO THEIR JARS', { count: P.bottled.back }), px + (pw >> 1), VT + 106, C.CRM0, C.UI0, FONT_S, 1, 1);
+    } else if (!M) {   // LOADING: four tabs — PIGMENTS (the jars, the dropper), RACK (pre-pour your pots), PACKS (pigment packs), RECIPES
       panel(px, VT + 4, pw, VB - VT - 8, null);
-      [T('JARS'), T('PIGMENTS'), T('RACK'), T('RECIPES')].forEach((t, k) => { const on = P.mixTab === MIX_TABS[k], w = 37, x = px + 4 + k * 38, y = VT + 7;
+      [T('PIGMENTS'), T('RACK'), T('PACKS'), T('RECIPES')].forEach((t, k) => { const on = P.mixTab === MIX_TABS[k], w = 37, x = px + 4 + k * 38, y = VT + 7;
         P.btns.push({ id: 'mt' + k, x, y, w, h: 12, on: true }); rect(x, y, w, 12, on ? C.UI3 : C.UI1); rectb(x, y, w, 12, on ? C.Y5 : C.UI3); textO(t, x + (w >> 1), y + 3, on ? C.Y6 : C.CRM0, C.UI0, FONT_S, 1, 1); });
-      if (P.mixTab === 'pig') drawPigTab(px, pw);
+      if (P.mixTab === 'rack') drawRackTab(px, pw);
+      else if (P.mixTab === 'packs') drawPacksTab(px, pw);
       else if (P.mixTab === 'book') drawBook(px, pw);
-      else if (P.mixTab === 'rack') drawRackTab(px, pw);
-      else drawJarsTab(px, pw);
-    } else {   // mixing: one panel as the tabs' — the dropper where the tabs were; YOUR RACK's shelves exactly where the RACK tab has
-               // them (review: a second tap on a bottle pours the same pot again, never the one that moved under the finger); then
-               // the best so far, your techniques, the rules
+      else drawPigmentsTab(px, pw);
+    } else {   // MIXING: the dropper (the next two drops, what is left), the best so far, your techniques, the rules, the finishes' marks
       panel(px, VT + 4, pw, VB - VT - 8, null);
-      if (M.q.length) { drawPot(px + 13, VT + 14, { h: M.q[0], f: 0 }, 6); textO(T('drop|NEXT'), px + 23, VT + 11, C.CRM0, C.UI0, FONT_S, 1, 0); }   // (the drop that falls in next)
-      else { circ(px + 13, VT + 14, 6, C.UI3); textO(T('drop|NONE'), px + 23, VT + 11, C.UI5, C.UI0, FONT_S, 1, 0); }   // (a mix from your rack: nothing falls in)
-      textO(TF('{count} DROPS LEFT', { count: M.q.length }), px + pw - 6, VT + 11, C.CRM1, C.UI0, FONT_S, 1, 2);
-      const L = rackList(), n = L.reduce((a, e) => a + e.n, 0);
-      textO(TF('YOUR RACK · {count} POTS', { count: n }), px + 6, VT + 28, n ? C.CRM2 : C.UI5, C.UI0, FONT_S, 1, 0);
-      const gr = drawRackGrid(px + 8, VT + 45, 8, 3, P.rackFocus ? (P.rackSel | 0) : -1);
-      rackPager(px + pw - 54, VT + 28, gr);
-      if (!gr.n) textO(T('NO POTS YET'), px + (pw >> 1), VT + 60, C.UI5, C.UI0, FONT_S, 1, 1);
-      else textO(T('A TAP POURS A POT INTO THE TRAY'), px + (pw >> 1), VT + 103, C.CRM0, C.UI0, FONT_S, 1, 1);
+      textO(T('THE DROPPER'), px + 6, VT + 9, C.Y6, C.UI0, FONT_S, 1, 0); textO(TF('{count} DROPS LEFT', { count: M.q.length }), px + pw - 6, VT + 9, C.CRM1, C.UI0, FONT_S, 1, 2);
+      if (M.q.length) { drawPot(px + 22, VT + 32, { h: M.q[0], f: 0 }, 9); textO(T('drop|NEXT'), px + 22, VT + 44, C.CRM0, C.UI0, FONT_S, 1, 1); }   // (the drop that falls in next)
+      else { circ(px + 22, VT + 32, 9, C.UI3); textO(T('drop|NONE'), px + 22, VT + 44, C.UI5, C.UI0, FONT_S, 1, 1); }
+      if (M.q.length > 1) { drawPot(px + 50, VT + 34, { h: M.q[1], f: 0 }, 6); textO(T('drop|THEN'), px + 50, VT + 44, C.UI5, C.UI0, FONT_S, 1, 1); }   // (and the one after: the next two show, as in TTA)
       const best = M.cells.reduce((a, p) => (p && (!a || p.f > a.f) ? p : a), null), top = SHOP.topFin(), tx = px + 8;
-      if (best) textO(TF('BEST: {what}', { what: TRAY.potLabel(best).toUpperCase() }), tx, VT + 110, finCol(best.f) || C.CRM1, C.UI0, FONT_S, 1, 0);
-      textO(top < 4 ? TF('YOUR TRAY CLIMBS TO {finish}', { finish: T(FINS[top].name).toUpperCase() }) : T('SAME + SAME: ONE FINISH UP'), tx, VT + 117, top < 4 ? C.O6 : C.CRM0, C.UI0, FONT_S, 1, 0);   // (M4: your techniques)
-      textO(T('R+Y=O · Y+B=G · R+B=V'), tx, VT + 124, C.CRM0, C.UI0, FONT_S, 1, 0); textO(T('+W: A TINT · +K: A SHADE'), tx, VT + 131, C.CRM0, C.UI0, FONT_S, 1, 0);
+      if (best) textO(TF('BEST: {what}', { what: TRAY.potLabel(best).toUpperCase() }), tx, VT + 56, C.CRM1, C.UI0, FONT_S, 1, 0);
+      textO(top < 4 ? TF('YOUR TRAY CLIMBS TO {finish}', { finish: T(FINS[top].name).toUpperCase() }) : T('SAME + SAME: ONE FINISH UP'), tx, VT + 64, top < 4 ? C.O6 : C.CRM0, C.UI0, FONT_S, 1, 0);   // (M4: your techniques)
+      textO(T('R+Y=O · Y+B=G · R+B=V'), tx, VT + 72, C.CRM0, C.UI0, FONT_S, 1, 0); textO(T('+W: A TINT · +K: A SHADE'), tx, VT + 80, C.CRM0, C.UI0, FONT_S, 1, 0);
+      finLegend(px + (pw >> 1), VT + 96);
     }
     bottom();
-    if (M && !P.bottled) {
+    if (P.bottled) { btn('again', T('AGAIN'), W - 136, VB + 2, 64, 13, { primary: true, sel: true }); btn('done', T('DONE'), W - 68, VB + 2, 64, 13); }
+    else if (M) {
       ['left', 'up', 'down', 'right'].forEach((d, k) => btn('sl' + d, ['◀', '▲', '▼', '▶'][k], 4 + k * 22, VB + 2, 20, 13));
-      // nothing slides: bottle it — or, with a well free and a pot on the rack, pour one in
-      if (!TRAY.canMove({ w: M.w || 4, h: M.h || 4, cells: M.cells }, trayOpts())) { if (((TIME * 2) | 0) % 2) textO(M.cells.some((c) => !c) && rackList().some((e) => e.f < LEG_F) ? T('NOTHING MOVES: POUR IN A POT, OR BOTTLE') : T('NOTHING MOVES: BOTTLE IT!'), 96, VB + 6, C.Y7, C.UI0, FONT_S, 1, 0); }
-      else if (IN.touch || !rackList().some((e) => e.f < LEG_F)) textO(IN.touch ? T('Swipe the tray') : T('Swipe, or the arrows'), 98, VB + 5, C.CRM1, C.UI0, FONT_M, 1, 0);
-      else textO(P.rackFocus ? T('ENTER POURS IT · TAB: THE TRAY') : T('ARROWS: THE TRAY · TAB: YOUR RACK'), 96, VB + 6, P.rackFocus ? C.Y6 : C.CRM1, C.UI0, FONT_S, 1, 0);
+      if (!TRAY.canMove({ w: M.w || 4, h: M.h || 4, cells: M.cells }, trayOpts())) { if (((TIME * 2) | 0) % 2) textO(T('NOTHING MOVES: BOTTLE IT!'), 96, VB + 6, C.Y7, C.UI0, FONT_S, 1, 0); }
+      else textO(IN.touch ? T('Swipe the tray') : T('Swipe, or the arrows'), 96, VB + 6, C.CRM1, C.UI0, FONT_S, 1, 0);
+      btn('undo', TF('UNDO {count}', { count: M.undo | 0 }), W - 116, VB + 2, 50, 13, { dim: !((M.undo | 0) > 0 && P.mixHist && P.mixHist.mix === M) });   // (one a mix, as in TTA: U)
       btn('bottle', T('BOTTLE'), W - 62, VB + 2, 58, 13, { primary: true, sel: true });
-    } else if (P.bottled) btn('okb', T('TO THE RACK'), W - 84, VB + 2, 80, 13, { primary: true, sel: true });
-    else textO(TF('Satin and up are pots a piece uses up. {tint} and {shade} make the mixed colours', { tint: T(SHOP.JARS.find((j) => j.id === 'tint').name), shade: T(SHOP.JARS.find((j) => j.id === 'shade').name) }), 6, VB + 6, C.CRM1, C.UI0, FONT_S, 1, 0);
-  }
-  /** JARS: the colours first (the primaries, then the eight: a tap shows that colour's jars), then a colour's jars with their prices
-   *  (◀ back to the colours). (after M6, Alex: "it takes too long to navigate the colors. maybe first just show colors") */
-  function drawJarsTab(px, pw) {
-    if (!P.jarOpen) {
-      textO(T('CHOOSE A COLOUR'), px + (pw >> 1), VT + 23, C.CRM2, C.UI0, FONT_S, 1, 1);
-      JAR_TILES.forEach((t, k) => {
-        const x = px + 4 + (k % 3) * 52, y = VT + 32 + ((k / 3) | 0) * 36, sel = P.jarKey && (P.jarSel | 0) === k, hov = IN.mouseActive() && !IN.touch && IN.over(x, y, 48, 32);
-        P.btns.push({ id: 'jt:' + t, x, y, w: 48, h: 32, on: true });
-        rrect(x, y, 48, 32, hov || sel ? C.UI3 : C.UI1); rrectb(x, y, 48, 32, sel ? C.Y7 : hov ? C.Y6 : C.UI3);
-        if (t === 'prim') ['R', 'Y', 'B'].forEach((hh, q) => drawJar(x + 14 + q * 10, y + 15, hh, false)); else drawJar(x + 24, y + 16, t, true);
-        textO(t === 'prim' ? T('tile|PRIMARIES') : T(HUE_NAME[t]).toUpperCase(), x + 24, y + 21, C.CRM2, C.UI0, FONT_S, 1, 1);
-      });
-      return;
+    } else {
+      const L = P.load || { order: [], pre: [] }, empty = !L.order.length && !L.pre.length;
+      btn('clear', T('CLEAR'), 4, VB + 2, 52, 13, { dim: empty }); btn('all', T('MIX ALL'), 60, VB + 2, 64, 13, { dim: !SHOP.dropsHeld() });
+      textO(TF(L.order.length === 1 ? '{count} DROP' : '{count} DROPS', { count: L.order.length }) + ' · ' + TF(L.pre.length === 1 ? '{count} POT' : '{count} POTS', { count: L.pre.length }), 128, VB + 6, empty ? C.UI5 : C.CRM1, C.UI0, FONT_S, 1, 0);
+      btn('start', T('START'), W - 62, VB + 2, 58, 13, { primary: true, sel: canStart(), dim: !canStart() });
     }
-    const t = P.jarOpen, js = tileJars(t), prim = t === 'prim';
-    btn('jback', '◀', px + 5, VT + 25, 18, 14);   // (its tap area clear of the tabs': the layout lint)
-    if (prim) ['R', 'Y', 'B'].forEach((hh, q) => drawJar(px + 31 + q * 9, VT + 37, hh, false)); else drawJar(px + 37, VT + 39, t, true);
-    textO(prim ? T('tile|PRIMARIES') : T(HUE_NAME[t]).toUpperCase(), px + (prim ? 58 : 50), VT + 29, C.Y6, C.UI0, FONT_M, 1, 0);
-    js.forEach((k, i) => {
-      const j = SHOP.JARS[k], y = VT + 44 + i * 24, price = SHOP.jarPrice(k), can = G.S.money >= price, mk = jarMakes(k), h = jarHue(k), sel = P.jarKey && (P.jarOpt | 0) === i;
-      rect(px + 4, y, pw - 8, 22, C.UI1); rectb(px + 4, y, pw - 8, 22, sel ? C.Y7 : C.UI3);
-      const hs = j.id === 'prim' ? ['R', 'Y', 'B'] : j.id === 'one' ? [h] : j.id === 'tint' ? [h, 'W'] : [h, 'K'];
-      hs.forEach((hh, q) => drawJar(px + 12 + q * 8, y + 15, hh, false));
-      textO(T(j.name), px + 34, y + 3, C.Y6, C.UI0, FONT_S, 1, 0);
-      textO(mk ? TF('MAKES {colour} (MIXED)', { colour: T(HUE_NAME[mk]).toUpperCase() }) : TF(j.note, { count: SHOP.tableAt().drops, half: SHOP.tableAt().drops >> 1 }), px + 34, y + 12, mk ? C.G6 : C.CRM0, C.UI0, FONT_S, 1, 0);
-      btn('jar' + k, fmtShort(price), px + pw - 44, y + 4, 40, 14, { primary: true, dim: !can });
-    });
-    if (t === 'W' || t === 'K') { textO(T('FOR A TINT OR A SHADE,'), px + (pw >> 1), VT + 74, C.CRM0, C.UI0, FONT_S, 1, 1); textO(T('CHOOSE ITS COLOUR'), px + (pw >> 1), VT + 82, C.CRM0, C.UI0, FONT_S, 1, 1); }
   }
-  /** YOUR RACK's shelves: cols x rows bottles a page (P.rackPg), each with how many; a tap on one pours it into the tray (its
-   *  button 'rk:<key>', 18 px apart: a finger's 36 pt). sel: the keyboard's (an index into the whole list), or -1 → { n, pages, pg } */
+  /** PIGMENTS: the eight jars — a tap lets a drop into the dropper (held: one after another), the number is what is left in it,
+   *  the + under it buys a sachet — and under them THE DROPPER: the drops in the order they went in (START shuffles them) */
+  function drawPigmentsTab(px, pw) {
+    const L = P.load;
+    HUES.forEach((h, k) => {
+      const x = px + 4 + (k % 4) * 38, y = VT + 25 + ((k / 4) | 0) * 50, left = jarLeft(h),   // (3 px under the tabs' tap areas: the layout lint)
+        pr = SHOP.sachetPrice(h), hov = IN.mouseActive() && !IN.touch && IN.over(x, y, 37, 26);
+      P.btns.push({ id: 'pj:' + h, x, y, w: 37, h: 26, on: true });
+      rrect(x, y, 37, 26, hov ? C.UI3 : C.UI1); rrectb(x, y, 37, 26, hov ? C.Y6 : C.UI3);
+      drawJar(x + 18, y + 14, h, true);
+      textO(String(left), x + 18, y + 17, left ? C.CRM2 : C.UI5, C.UI0, FONT_S, 1, 1);
+      if (!IN.touch) textO(String(k + 1), x + 3, y + 2, C.UI5, C.UI0, FONT_S, 1, 0);   // (its key, as TTA's jars show it)
+      btn('pb:' + h, '+' + SHOP.SACHET + ' ' + fmtShort(pr), x, y + 30, 37, 13, { dim: G.S.money < pr });
+    });
+    const n = L.order.length, dy = VT + 124;
+    textO(TF('THE DROPPER · {count} / {cap}', { count: n, cap: batchCap() }), px + 6, dy, n ? C.CRM2 : C.UI5, C.UI0, FONT_S, 1, 0);
+    L.order.forEach((h, i) => drawPot(px + 9 + i * 6, dy + 12, { h, f: 0 }, 2));
+  }
+  /** YOUR RACK's shelves: cols x rows bottles a page (P.rackPg), each with how many are left (LOADING: less the pre-poured); a tap
+   *  on one picks it to pre-pour (its button 'rk:<key>', 18 px apart: a finger's 36 pt). sel: the keyboard's (an index into the
+   *  whole list), or -1 → { n, pages, pg } */
   function drawRackGrid(x, y, cols, rows, sel) {
     const L = rackList(), per = cols * rows, pages = Math.max(1, Math.ceil(L.length / per));
     P.rackPg = clamp(P.rackPg | 0, 0, pages - 1); const pg = P.rackPg;
     for (let r = 0; r < rows; r++) { const sy = y + r * 18 + 15; hline(x - 3, x + cols * 18 - 3, sy, C.WOD3); hline(x - 3, x + cols * 18 - 3, sy + 1, C.WOD1); }   // the shelves
     L.slice(pg * per, pg * per + per).forEach((e, k) => {
-      const bx = x + (k % cols) * 18, by = y + ((k / cols) | 0) * 18;
+      const bx = x + (k % cols) * 18, by = y + ((k / cols) | 0) * 18, left = Math.max(0, e.n - (e.f < LEG_F && P.load ? prePoured(e.h, e.f) : 0));
       P.btns.push({ id: 'rk:' + e.key, x: bx - 1, y: by - 1, w: 17, h: 17, on: true });
-      if (pg * per + k === sel) rectb(bx - 2, by - 2, 19, 19, C.Y7);
-      if (e.n > 0) drawBottle(bx + 4, by + 14, e, 's');
-      else sprite(BOTTLE.s.rows, bx, by + 2, (k) => (k === 'o' ? C.UI3 : k === 'c' ? C.UI2 : k === 'b' ? C.UI2 : C.UI1));   // (emptied: its place kept)
-      textO(String(e.n), bx + 17, by + 8, e.n > 0 ? C.CRM2 : C.UI4, C.UI0, FONT_S, 1, 2);   // (right-aligned in its 18 px: clear of the next bottle — review)
+      if (P.preSel === e.key) rectb(bx - 2, by - 2, 19, 19, C.Y6); else if (pg * per + k === sel) rectb(bx - 2, by - 2, 19, 19, C.Y7);
+      if (left > 0) drawBottle(bx + 4, by + 14, e, 's');
+      else sprite(BOTTLE.s.rows, bx, by + 2, (q) => (q === 'o' ? C.UI3 : q === 'c' || q === 'b' ? C.UI2 : C.UI1));   // (all of it poured ahead: an empty bottle)
+      textO(String(left), bx + 17, by + 8, left > 0 ? C.CRM2 : C.UI4, C.UI0, FONT_S, 1, 2);   // (right-aligned in its 18 px: clear of the next bottle)
     });
     return { n: L.length, pages, pg };
   }
@@ -11268,36 +11304,36 @@ const PROTO = {};
     if (g.pages <= 1) return;
     btn('rk<', '◀', x, y - 3, 16, 13); textO(`${g.pg + 1}/${g.pages}`, x + 24, y, C.CRM0, C.UI0, FONT_S, 1, 1); btn('rk>', '▶', x + 33, y - 3, 16, 13);
   }
-  /** the finishes' marks: • SATIN  •• METALLIC / ••• PEARL  ★ STARLIGHT, each in its rarity colour (two lines from y, centred) */
+  /** the finishes' marks: • SATIN  •• METALLIC / ••• PEARL  ★ STARLIGHT (two lines from y, centred) */
   function finLegend(cx, y) {
     [[1, 2], [3, 4]].forEach((pair, li) => {
       const items = pair.map((f) => ({ f, t: (f >= 4 ? '★' : '•'.repeat(f)) + ' ' + T(FINS[f].name).toUpperCase() })), tw = items.reduce((a, it) => a + textW(it.t, FONT_S), 0) + 10;
-      let x = cx - (tw >> 1); for (const it of items) { textO(it.t, x, y + li * 8, finCol(it.f), C.UI0, FONT_S, 1, 0); x += textW(it.t, FONT_S) + 10; }
+      let x = cx - (tw >> 1); for (const it of items) { textO(it.t, x, y + li * 8, C.CRM1, C.UI0, FONT_S, 1, 0); x += textW(it.t, FONT_S) + 10; }
     });
   }
-  /** RACK: every pot you have, as bottles on shelves (8 x 3 a page; the Legendary paints first, then the rarest): a tap pours one
-   *  into the tray, to mix it on (after M6, Alex: "its not possible to mix finalized from my rack into rarer colors") */
+  /** RACK (LOADING): every pot you have as a bottle on a shelf (8 x 3 a page; the Legendary paints first, then the rarest). PRE-POUR:
+   *  a tap picks one, then a tap on a well in the tray pours it there — the mix starts with it (Alex: "i can place jars directly
+   *  to mix rarers ones"); up to SHOP.tableAt().pre a mix */
   function drawRackTab(px, pw) {
     const L = rackList(), n = L.reduce((a, e) => a + e.n, 0);
     textO(TF('YOUR RACK · {count} POTS', { count: n }), px + 6, VT + 28, n ? C.CRM2 : C.UI5, C.UI0, FONT_S, 1, 0);
     if (!L.length) { textO(T('NO POTS YET: BOTTLE A MIX'), px + (pw >> 1), VT + 60, C.UI5, C.UI0, FONT_S, 1, 1); finLegend(px + (pw >> 1), VT + 113); return; }
     const gr = drawRackGrid(px + 8, VT + 45, 8, 3, P.rackKey ? (P.rackSel | 0) : -1);   // (the shelves 4 px under the ◀ ▶'s tap areas: the layout lint)
     rackPager(px + pw - 54, VT + 28, gr);
-    textO(T('A TAP POURS A POT INTO THE TRAY'), px + (pw >> 1), VT + 103, C.CRM0, C.UI0, FONT_S, 1, 1);
-    finLegend(px + (pw >> 1), VT + 113);
+    const pre = (P.load && P.load.pre.length) | 0;
+    textO(P.preSel ? T('NOW TAP A WELL IN THE TRAY') : T('A POT, THEN A WELL: THE MIX'), px + (pw >> 1), VT + 101, P.preSel ? C.Y6 : C.CRM0, C.UI0, FONT_S, 1, 1);
+    textO(TF('STARTS WITH IT · {count} / {max} POTS', { count: pre, max: preMax() }), px + (pw >> 1), VT + 108, C.CRM0, C.UI0, FONT_S, 1, 1);
+    finLegend(px + (pw >> 1), VT + 118);
   }
-  /** PIGMENTS: your drops by colour, MIX MY PIGMENTS, and the pigment pack (five cards by rarity) */
-  function drawPigTab(px, pw) {
-    const d = G.S.drops || {}, n = SHOP.dropsHeld(), t = SHOP.tableAt();
-    textO(TF('YOUR PIGMENTS · {count} DROPS', { count: n }), px + (pw >> 1), VT + 24, n ? C.CRM2 : C.UI5, C.UI0, FONT_S, 1, 1);
-    HUES.forEach((h, k) => { const x = px + 14 + (k % 4) * 37, y = VT + 38 + Math.floor(k / 4) * 13, c = d[h] | 0; drawPot(x, y, { h, f: 0 }, 5); textO('' + c, x + 8, y - 3, c ? C.CRM2 : C.UI5, C.UI0, FONT_S, 1, 0); });
-    btn('mine', TF('MIX MY PIGMENTS ({count})', { count: Math.min(n, t.drops) }), px + 6, VT + 58, pw - 12, 14, { primary: n > 0, dim: !n });
-    const pr = SHOP.pigPrice(), od = SHOP.PIG.odds, ky = VT + 80;
+  /** PACKS: the pigment pack (five cards by rarity: drops into the jars, ready pots onto the rack, now and then a recipe card) */
+  function drawPacksTab(px, pw) {
+    const pr = SHOP.pigPrice(), od = SHOP.PIG.odds, ky = VT + 26;
     rect(px + 4, ky, pw - 8, 30, C.UI1); rectb(px + 4, ky, pw - 8, 30, C.UI3); gem(px + 9, ky + 4, -1);
     textO(T('PIGMENT PACK · 5 CARDS'), px + 20, ky + 3, C.Y6, C.UI0, FONT_S, 1, 0);
     btn('pigbuy', fmtShort(pr), px + pw - 44, ky + 2, 40, 11, { primary: true, dim: G.S.money < pr });
     [0, 1, 2, 3].forEach((r) => textO(`${T(RAR[r].name).slice(0, 1).toUpperCase()}${Math.round(od[r] * 100)}%`, px + 10 + r * 36, ky + 13, rcol(r), C.UI0, FONT_S, 1, 0));
     textO(T('DROPS · POTS · A RECIPE'), px + (pw >> 1), ky + 21, C.CRM0, C.UI0, FONT_S, 1, 1);
+    textO(T('ITS DROPS GO INTO THE JARS,'), px + (pw >> 1), ky + 40, C.CRM0, C.UI0, FONT_S, 1, 1); textO(T('ITS POTS ONTO YOUR RACK'), px + (pw >> 1), ky + 48, C.CRM0, C.UI0, FONT_S, 1, 1);
   }
   /** THE RECIPE BOOK: the Legendary paints — made (its name, its pots), known from a recipe card (its pots), or still a riddle */
   function drawBook(px, pw) {
@@ -11692,7 +11728,7 @@ const PROTO = {};
       textO(TF('5 RANDOM FIGURES, ONE UNCOMMON OR BETTER · WORTH ~{money}', { money: fmtMoney(Math.round(packWorth(P.series))) }), 50, VB + 10, C.CRM0, C.UI0, FONT_S, 1, 0);
     } else { textO(T(FIGS[P.shopSel].name), 50, VB + 1, rcol(FIGS[P.shopSel].rar), C.UI0, FONT_M, 1, 0); infoLine(P.shopSel, 50, VB + 10); }
     const sp = shopPrice(P.shopSel);
-    const bl = locked ? TF('LEVEL {lvl}', { lvl: SHOP.unlockLevel(sd0.tier) }) : TF('BUY {money}', { money: fmtShort(sp) }), bw = Math.max(58, textW(bl, FONT_M) + 8); btn('buy', bl, W - 4 - bw, VB + 2, bw, 13, { primary: true, dim: locked || G.S.money < sp, sel: true });
+    const po = !pk && packOnly(P.shopSel), bl = locked ? TF('LEVEL {lvl}', { lvl: SHOP.unlockLevel(sd0.tier) }) : po ? T('ONLY IN PACKS') : TF('BUY {money}', { money: fmtShort(sp) }), bw = Math.max(58, textW(bl, FONT_M) + 8); btn('buy', bl, W - 4 - bw, VB + 2, bw, 13, { primary: !po, dim: locked || po || G.S.money < sp, sel: true });
   }
   /** the pack opens: the cards (face down → a squash → face up: the portrait in its rarity's light, the name in its colour) */
   function drawPackUI() {
@@ -11961,15 +11997,15 @@ const PROTO = {};
     HDUI.draw();
   }
   Scenes.define('paint', { enter: enterPaint, update: updatePaint, draw: drawPaint });
-  Object.assign(PROTO, { P, ST, ext: (ph, def) => { EXT[ph] = def; }, station: (key, enter) => { STX[key] = enter; }, go, say, pop, sfx, burst, btn, hitBtn, overUI,
+  Object.assign(PROTO, { P, ST, resetLoad, ext: (ph, def) => { EXT[ph] = def; }, station: (key, enter) => { STX[key] = enter; }, go, say, pop, sfx, burst, btn, hitBtn, overUI,
     panel, bottom, band, prompt, looks, figIdx, FIGS, RAR, rcol, fmtShort, fmtNum, gainXP, toRoom, toStation, mark, chip, drawPot, coinIcon, boostIcon,
     pctB, boostName, BOOST_COL, tent, shadowEll, blitClip, listPiece, auctionsFull, buildShelf, alsoWide, shelfNow: () => { buildShelf(); for (const m of R.shelf) if (m) m.fade = 1; }, backdrop, PTR, holdAny, newHold, aimRing, webOpen, potsOfHue, dissolveBlit, lock, gem, emblem, orderIcon, hueRamp });
-  if (typeof DEV !== 'undefined') DEV.proto = { debugState: (p) => debugState(p), slideTray, bottleTray, buyJar, rackToTray, rackList, openTile, finCol, trayCell: (i) => { const g = TG(), [x, y] = cellXY(i); return [x + (g.cell >> 1), y + (g.cell >> 1), g.r]; }, usable, ALLH, LEGS, buyPot, mixMine, buyPig, isFree, potsOf, buyPack, P, FIGS, FINS, RAR, PACK, packPrice, packWorth, costOf, AIM, valueOf, quality, recipe, rollPack, nSteps, oslColour, shelfFades: () => R.shelf.map((m) => (m ? m.fade : -1)), R, emblem, ICON_ART, ptr: () => JSON.stringify([...PTR]), ST, CASE_SLOTS, caseSlot, offerAt, toCase, buyPlan, figIdx, gradeOf, masterQ, bringForward, slotX, fitting, flipSign, applyLamp, timing: () => ({ WIN, CRISP, PERFECT, GOOD, WASH_OK, WASH_WIN }), tipBtn, TIP, POINT_STEPS };
+  if (typeof DEV !== 'undefined') DEV.proto = { debugState: (p) => debugState(p), slideTray, bottleTray, addDrop, buyPigment, mixAll, startMix, undoMix, clearLoad, rackPick, wellTap, rackList, load: () => P.load, trayCell: (i) => { const g = TG(), [x, y] = cellXY(i); return [x + (g.cell >> 1), y + (g.cell >> 1), g.r]; }, usable, ALLH, LEGS, buyPot, buyPig, isFree, potsOf, buyPack, P, FIGS, FINS, RAR, PACK, packPrice, packWorth, costOf, AIM, valueOf, quality, recipe, rollPack, nSteps, oslColour, shelfFades: () => R.shelf.map((m) => (m ? m.fade : -1)), R, emblem, ICON_ART, ptr: () => JSON.stringify([...PTR]), ST, CASE_SLOTS, caseSlot, offerAt, toCase, buyPlan, figIdx, gradeOf, masterQ, bringForward, slotX, fitting, flipSign, applyLamp, timing: () => ({ WIN, CRISP, PERFECT, GOOD, WASH_OK, WASH_WIN }), tipBtn, TIP, POINT_STEPS };
 
   // ================================================================== the title: the room, a finished hero, the name
   const TT = { J: null, t: 0, arm: 0, btns: [] };
   const freshState = () => { G.S.fins = { matte: 1 }; G.S.kept = []; G.S.pile = { knight: 1 }; G.S.stock = []; G.S.lvl = 1; G.S.xp = 0; G.S.up = {}; G.S.q = []; G.S.stats = {}; G.S.col = {}; G.S.open = true; G.S.comm = []; G.S.skill = [];
-    G.S.list = []; G.S.orders = []; G.S.revs = []; G.S.pots = {}; G.S.legs = {}; G.S.swatch = {}; G.S.drops = {}; G.S.recipes = {}; G.S.mix = null; G.S.r8 = 1; delete G.S.custT; delete G.S.served; delete G.S.commT; delete G.S.lastBase; SHOP.ensure(); };
+    G.S.list = []; G.S.orders = []; G.S.revs = []; G.S.pots = {}; G.S.legs = {}; G.S.swatch = {}; G.S.drops = {}; G.S.recipes = {}; G.S.mix = null; G.S.r8 = 1; delete G.S.custT; delete G.S.served; delete G.S.commT; delete G.S.lastBase; SHOP.ensure(); resetLoad(); };
   Scenes.define('title', {
     enter() {
       initRoom(); ST.key = 'bench'; HD.room.scan(R.B); R.scanned = 'bench'; TT.t = 0; TT.arm = 0;
@@ -12901,6 +12937,7 @@ const ADMIN = (() => {
     const S = G.S; if (!S || S.admin) return false;
     S.adminSnap = JSON.stringify(S);   // the whole game as it is (restored on OFF)
     S.admin = 1;
+    if (typeof PROTO !== 'undefined' && PROTO.resetLoad) PROTO.resetLoad();   // (round 12 review: the mixing table's dropper starts over)
     fill(true);
     SHOP.ensure();   // (its last step: unlock(), below)
     if (typeof HUD !== 'undefined' && HUD.snap) HUD.snap(); if (typeof PROTO !== 'undefined' && PROTO.shelfNow) PROTO.shelfNow(); G.save(); return true;
@@ -12936,6 +12973,7 @@ const ADMIN = (() => {
     if (!snap || typeof snap !== 'object') { delete S.admin; delete S.adminSnap; G.save(); return false; }   // (no snapshot: just off)
     for (const k of Object.keys(S)) delete S[k];
     Object.assign(S, snap); delete S.admin; delete S.adminSnap;
+    if (typeof PROTO !== 'undefined' && PROTO.resetLoad) PROTO.resetLoad();   // (the real game's own dropper: none loaded — admin's never carries over)
     SHOP.ensure(); if (typeof HUD !== 'undefined' && HUD.snap) HUD.snap(); if (typeof PROTO !== 'undefined' && PROTO.shelfNow) PROTO.shelfNow();   // (the title's wall shelf shows your own pieces again)
     if (typeof ROOMS !== 'undefined') ROOMS.apply();   // (M5 review: and the room its own room theme again)
     G.save(); return true;
