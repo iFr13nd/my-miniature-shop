@@ -10613,7 +10613,7 @@ const PROTO = {};
     for (let i = q.length - 1; i > 0; i--) { const j = Math.floor(RNG.f() * (i + 1)), tt = q[i]; q[i] = q[j]; q[j] = tt; }
     for (let n = 0; n < TRAY.START_DROPS && q.length; n++) { const e = []; cells.forEach((c, i) => { if (!c) e.push(i); }); if (!e.length) break; cells[e[Math.floor(RNG.f() * e.length)]] = { h: q.shift(), f: 0 }; }
     G.S.mix = { cells, q, jar: 'mix', paid: 0, n: P.load.order.length, w: t.cols, h: t.rows, undo: 1 };
-    P.load = { order: [], pre: [], w: t.cols, h: t.rows }; P.preSel = null; P.wcur = -1; P.rackKey = false; P.mixHist = null; P.mixAnim = null; P.mixNext = null; P.bottleArm = 0; P.dis = 0; P.mixT = TIME;
+    P.load = { order: [], pre: [], w: t.cols, h: t.rows }; P.preSel = null; P.wcur = -1; P.rackKey = false; P.mixHist = null; P.mixAnim = null; P.mixNext = null; P.bottleArm = 0; P.bottleSay = null; P.dis = 0; P.mixT = TIME;
     G.save(); sfx('pour'); return true;
   }
   /** UNDO (one a mix, as in Tom's Tiny Armies): the tray and the dropper as they were before the last slide */
@@ -10661,9 +10661,11 @@ const PROTO = {};
     if ((M.q.length || more) && !P.bottleArm) {   // (TTA's SURE?: drops still to fall, or pots that can still climb)
       P.bottleArm = TIME; sfx('ui_move');
       say(M.q.length ? TF(M.q.length === 1 ? '{count} drop still in the dropper: BOTTLE again to stop (it goes back to its jar)' : '{count} drops still in the dropper: BOTTLE again to stop (they go back to their jars)', { count: M.q.length }) : T('The tray can still climb: BOTTLE again to stop'));
+      P.bottleSay = P.msg;
       return;
     }
-    P.bottleArm = 0;
+    // (the SURE? note goes once it bottles: it no longer hangs over BOTTLED!, a note that came meanwhile stays)
+    P.bottleArm = 0; if (P.bottleSay && P.msg === P.bottleSay) P.msg = ''; P.bottleSay = null;
     const b = TRAY.bottle({ w: M.w || 4, h: M.h || 4, cells: M.cells }, M.q);
     for (const p of b.pots) { if (p.f >= TRAY.LEG) G.S.legs[p.leg] = (G.S.legs[p.leg] | 0) + 1; else G.S.pots[p.h + p.f] = potsOf(p.h, p.f) + 1; }
     G.S.drops = G.S.drops || {}; for (const h in b.back) G.S.drops[h] = (G.S.drops[h] | 0) + b.back[h];
