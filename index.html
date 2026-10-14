@@ -12851,7 +12851,8 @@ const SETTINGS = (() => {
    highlight ring, an eye, the glow) and how early or late each let-go is (a basecoat's chime, the glow's ring, the wash's gold
    band, the packing label and tape), with the screen's frame rate. The last 800 notes are kept (localStorage '<id>-feel').
    SETTINGS → SEND FEEL DATA posts them to the Mac that serves the game (tools/serve.mjs: POST /feel → feel/*.json, read by
-   tools/feel_report.mjs). The row shows only when the page comes from that server (GET /feel/ping answers): nowhere else.
+   tools/feel_report.mjs). The row shows only when the page comes from that server (GET /feel/ping answers; asked only on the
+   local network, never on a public copy like GitHub Pages): nowhere else.
    Exposes FEEL = { add(kind, value, extra), count(), mac(), busy(), send(cb) }.
    ============================================================================= */
 const FEEL = (() => {
@@ -12869,9 +12870,12 @@ const FEEL = (() => {
     notes.push(n); if (notes.length > MAX) notes.splice(0, notes.length - MAX);
     if (++dirty >= 10) save();
   }
-  // the Mac's server (tools/serve.mjs) answers GET /feel/ping: only then is there anywhere to send the notes
+  // the Mac's server (tools/serve.mjs) answers GET /feel/ping: only then is there anywhere to send the notes. It is always on the
+  // local network (the Mac's .local name, a private or VPN address, this computer): a public copy (GitHub Pages) never asks,
+  // so a player there gets no 404 in the console
+  const lan = (h) => /\.local$/i.test(h) || h === 'localhost' || h === '[::1]' || /^(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(h);   // (100.64/10: a VPN such as Tailscale)
   try {
-    if (typeof location !== 'undefined' && /^https?:$/.test(location.protocol) && typeof fetch === 'function') {
+    if (typeof location !== 'undefined' && /^https?:$/.test(location.protocol) && lan(location.hostname) && typeof fetch === 'function') {
       fetch('feel/ping', { cache: 'no-store' }).then((r) => r.ok && r.json()).then((o) => { mac = !!(o && o.ok); }).catch(() => { mac = false; });
     }
   } catch (e) { /* no network here */ }
