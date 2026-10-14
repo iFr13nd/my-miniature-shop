@@ -8532,33 +8532,59 @@ const SHOP = (() => {
   const topFin = () => { const o = (G.S && G.S.fins) || {}; let k = 0; FIN_IDS.forEach((id, i) => { if (o[id]) k = i; }); return k; };
   /** a ready pot of finish f (a colour of the bench's eight): its drops' worth (a non-primary's, 3.75), x1.6 (mixing pays) */
   const potPrice = (f) => Math.max(1, Math.round(DROP_K.other * D.VAL(tierAt(lvl())) * Math.pow(2, f) * 1.6));
-  /** PIGMENT PACKS: five cards, each by rarity (like the figures' packs): COMMON 4 drops of a primary, UNCOMMON 4 of a secondary or
-   *  of white / black, RARE two pots already mixed (Satin + Metallic of one colour), EPIC a Legendary recipe card + a Pearl pot of
-   *  one of its two colours (every recipe known: two Pearl pots). The drops go to YOUR PIGMENTS (G.S.drops), mixed at the table */
-  const PIG = { n: 5, k: 70, odds: [0.62, 0.28, 0.08, 0.02] };
-  const pigPrice = () => Math.round(PIG.k * D.VAL(tierAt(lvl())));
-  function rollPig(rnd, known) {
-    const cards = [], dealt = {};   // (a recipe dealt once a pack: the review)
-    for (let i = 0; i < PIG.n; i++) {
-      let u = rnd(), r = 0; while (r < 3 && u >= PIG.odds[r]) { u -= PIG.odds[r]; r++; }
-      if (i === PIG.n - 1 && cards.every((c) => c.r === 0) && r === 0) r = 1;   // (at least one uncommon or better, like the figures' packs)
-      const pick = (a) => a[Math.floor(rnd() * a.length)];
-      if (r === 0) cards.push({ r, drops: { [pick(['R', 'Y', 'B'])]: 4 } });
-      else if (r === 1) cards.push({ r, drops: { [pick(['O', 'G', 'V', 'W', 'K'])]: 4 } });
-      else if (r === 2) { const h = pick(['R', 'Y', 'B', 'O', 'G', 'V', 'W', 'K']); cards.push({ r, pots: [{ h, f: 1 }, { h, f: 2 }] }); }
-      else {
-        const todo = TRAY.RECIPES.filter((x) => !(known && known[x.id]) && !dealt[x.id] && x.id !== 'marmalade'), rc = todo.length ? pick(todo) : null; if (rc) dealt[rc.id] = 1;
-        cards.push(rc ? { r, recipe: rc.id, pots: [{ h: rc.pots[0].h, f: 3 }] } : { r, pots: [{ h: pick(['R', 'Y', 'B']), f: 3 }, { h: pick(['O', 'G', 'V']), f: 3 }] });
-      }
-    }
-    return cards.sort((a, b) => a.r - b.r);   // (the best one last, as the figures' packs)
+  /** ROUND 13 (Alex: "packs in the mixing table should be final coloring pots not pigments. from an economic pov it should always
+   *  be cheaper to manually mix then to buy these packs"): a POT PACK is five ready pots, built like the figures' packs (five
+   *  figures, one uncommon or better): four COMMON cards, a SATIN pot each, and one better card last — UNCOMMON a METALLIC
+   *  (70%), RARE a PEARL (22%), EPIC (8%) a Legendary RECIPE card with a Pearl of one of its two colours (every recipe known: a
+   *  Pearl, as the rare). The colours are the bench's eight (a tint or a shade comes only out of the tray: the commissions').
+   *  A pack holds only the finishes you know (your techniques, topFin: a card above them gives your best one), so every pot in
+   *  it is one you could mix yourself; Starlight never comes out of a pack, only hands make it.
+   *  ITS PRICE is POTPACK.k (1.5) x what its pots cost to mix by hand on average: a pot's 2^f drops at its colour's drop price.
+   *  Four Satins and one better card stay close to that average (the luckiest pack, a Pearl, every pot in a dearest colour:
+   *  x1.39), so EVERY pack costs more than mixing its pots yourself (tools/proto_play.mjs checks every tier and every
+   *  technique). A pack's pots still come cheaper than ready pots bought one by one (potPrice: x1.6 the dearest drops) */
+  const POTPACK = { n: 5, k: 1.5, best: [0.70, 0.22, 0.08] };
+  const PP_FIN = [1, 2, 3, 3];   // a card's finish by its rarity: Satin, Metallic, Pearl, Pearl (+ the recipe)
+  /** the finish of a card of rarity r at your techniques (top): never past the best you know, never under Satin */
+  const ppFin = (r, top = topFin()) => Math.max(1, Math.min(PP_FIN[r], top));
+  /** what a pot costs to mix by hand: its drops (2^f) at its colour's drop price */
+  const handCost = (p) => Math.pow(2, p.f) * dropPrice(p.h);
+  /** the recipes a pack's EPIC card can bring: the ones you don't know yet (never Marmalade, the joke trap) */
+  const ppRecipes = (known) => TRAY.RECIPES.filter((x) => !(known && known[x.id]) && x.id !== 'marmalade');
+  /** the best card's chances at your techniques, by what it gives: [{ f, recipe, p }] (finishes the cap folds together add up) */
+  function potPackBest(known, top = topFin()) {
+    const left = ppRecipes(known).length > 0, out = [];
+    POTPACK.best.forEach((p, i) => {
+      const rec = i === 2 && left, f = ppFin(i + 1, top), o = out.find((q) => q.f === f && q.recipe === rec);
+      if (o) o.p += p; else out.push({ f, recipe: rec, p });
+    });
+    return out;
   }
-  /** a pigment pack's cards into the game: drops to YOUR PIGMENTS, pots to the rack, a recipe card into the recipe book */
-  function openPig(cards) {
-    const S = G.S; S.drops = S.drops || {}; S.pots = S.pots || {}; S.recipes = S.recipes || {};
+  /** what a pack's pots cost to mix by hand, on average (every colour as likely) */
+  function potPackHand(top = topFin()) {
+    const avg = HUES.reduce((a, h) => a + dropPrice(h), 0) / HUES.length;
+    let drops = (POTPACK.n - 1) * Math.pow(2, ppFin(0, top));
+    POTPACK.best.forEach((p, i) => { drops += p * Math.pow(2, ppFin(i + 1, top)); });
+    return drops * avg;
+  }
+  const potPackPrice = (top = topFin()) => Math.max(1, Math.round(POTPACK.k * potPackHand(top)));
+  /** a pot pack's five cards [{ r, pots: [{ h, f }], recipe? }], the best one last. A card shows the rarity of its finish (a
+   *  Satin is common, so a card the cap brought down shows as what it is); a recipe card is EPIC */
+  function rollPotPack(rnd, known, top = topFin()) {
+    const pick = (a) => a[Math.floor(rnd() * a.length)], cards = [];
+    for (let i = 0; i < POTPACK.n - 1; i++) cards.push({ pots: [{ h: pick(HUES), f: ppFin(0, top) }] });
+    let u = rnd(), r = 1; while (r < 3 && u >= POTPACK.best[r - 1]) { u -= POTPACK.best[r - 1]; r++; }
+    const todo = r === 3 ? ppRecipes(known) : [];
+    if (todo.length) { const rc = pick(todo); cards.push({ r: 3, recipe: rc.id, pots: [{ h: pick(rc.pots).h, f: ppFin(3, top) }] }); }
+    else cards.push({ pots: [{ h: pick(HUES), f: ppFin(Math.min(r, 2), top) }] });
+    for (const c of cards) if (!c.recipe) c.r = c.pots[0].f - 1;
+    return cards.sort((a, b) => a.r - b.r);
+  }
+  /** a pot pack's cards into the game: the pots onto YOUR RACK, a recipe card into the recipe book */
+  function openPotPack(cards) {
+    const S = G.S; S.pots = S.pots || {}; S.recipes = S.recipes || {};
     for (const c of cards) {
-      if (c.drops) for (const h in c.drops) S.drops[h] = (S.drops[h] | 0) + c.drops[h];
-      if (c.pots) for (const p of c.pots) S.pots[p.h + p.f] = (S.pots[p.h + p.f] | 0) + 1;
+      for (const p of c.pots || []) S.pots[p.h + p.f] = (S.pots[p.h + p.f] | 0) + 1;
       if (c.recipe) S.recipes[c.recipe] = 1;
     }
   }
@@ -8862,7 +8888,7 @@ const SHOP = (() => {
     if (!S.pots || typeof S.pots !== 'object') S.pots = {};      // mixed paint pots: 'B3' (Blue Pearl) → how many
     if (!S.legs || typeof S.legs !== 'object') S.legs = {};      // Legendary paints made: id → how many
     if (!S.swatch || typeof S.swatch !== 'object') S.swatch = {}; // the swatch book: every pot (and Legendary) you have mixed
-    if (!S.drops || typeof S.drops !== 'object') S.drops = {};    // M4: YOUR PIGMENTS, drops from pigment packs: hue → how many
+    if (!S.drops || typeof S.drops !== 'object') S.drops = {};    // YOUR PIGMENTS: drops in their jars (round 12: bought by the sachet at the mixing table): hue → how many
     if (!S.recipes || typeof S.recipes !== 'object') S.recipes = {};   // M4: the recipe book: the Legendary recipes you know
     for (const id in S.swatch) if (TRAY.RECIPE[id]) S.recipes[id] = 1;   // (a recipe you have made once you know)
     if (S.fins && lvl() >= MIX_LV && !S.fins.satin) S.fins.satin = 1;
@@ -8954,7 +8980,7 @@ const SHOP = (() => {
     document.addEventListener('visibilitychange', back); window.addEventListener('pageshow', back);
   } catch (e) { /* headless */ }
 
-  return { LEG_ODDS, PITY, CR, PLAQUES, TRACKS, KINDS, HUES, HUE_WORD, MAX_LVL, COMM_LV, MIX_LV, MARKET_LV, SACHET, dropPrice, sachetPrice, TABLES, tableAt, topFin, potPrice, PIG, pigPrice, rollPig, openPig, dropsHeld, AUTO_AT, HOURS, XP_RATE, ensure, setOpen, tick, catchUp, arrivals, commArrivals, lvl, up, tierOf, figTier,
+  return { LEG_ODDS, PITY, CR, PLAQUES, TRACKS, KINDS, HUES, HUE_WORD, MAX_LVL, COMM_LV, MIX_LV, MARKET_LV, SACHET, dropPrice, sachetPrice, TABLES, tableAt, topFin, potPrice, POTPACK, PP_FIN, ppFin, handCost, potPackBest, potPackHand, potPackPrice, rollPotPack, openPotPack, dropsHeld, AUTO_AT, HOURS, XP_RATE, ensure, setOpen, tick, catchUp, arrivals, commArrivals, lvl, up, tierOf, figTier,
     BOOSTS, caseLit, boostMax, rollBoost, boost, arrangeCase, payout, boostXP, arriveEvery, FRESH, isMixed, mixWords,
     AUCTION_MS, BIN_MS, listSlots, BIDDERS, rating, marketMean, newListing, bidNow, marketTick, starsOf, ship, BOOST_CAP, settlePending,
     unlockLevel, seriesOpen, tierAt, xpNeed, xpPaint, xpSell, addXP, unlocksAt, minutesFor, xpTier,
@@ -10515,7 +10541,7 @@ const PROTO = {};
   //               next two show); one UNDO a mix (U), as in TTA. BOTTLE (B) when you like.
   //      BOTTLED  every Satin-or-better pot goes into YOUR RACK; the Matte drops and the ones still in the dropper go back to
   //               their jars — nothing is lost (TTA's rule). AGAIN (ENTER) loads the next mix, DONE leaves the table.
-  //      The PACKS tab sells pigment packs (M4: drops, ready pots, recipe cards); RECIPES is the book of the Legendary paints.
+  //      The PACKS tab sells POT PACKS (round 13: five ready pots, dearer than mixing them); RECIPES is the book of the Legendary paints.
   //      A finished colour's finish shows by its pips: Satin •, Metallic ••, Pearl •••, Starlight ★ (round 12: nothing else).
   /** the tray's geometry for a w x h board: 26 px wells on the 4x4, 24 on 5 columns, 22 on 5 rows, 20 on 6 columns */
   function trayGeo(w, h) {
@@ -10621,25 +10647,25 @@ const PROTO = {};
     const M = G.S.mix; if (!M || !P.mixHist || P.mixHist.mix !== M || !((M.undo | 0) > 0)) { sfx('ui_back', { vol: 0.5 }); return false; }
     M.cells = P.mixHist.cells; M.q = P.mixHist.q; M.undo = (M.undo | 0) - 1; P.mixHist = null; P.mixAnim = null; P.mixNext = null; G.save(); sfx('ui_back'); return true;
   }
-  /** a PIGMENT PACK: five cards by rarity (SHOP.rollPig) — drops, ready pots, a Legendary recipe — into the game at once (a
-   *  closed app keeps them), then dealt face down and turned over one by one */
-  function buyPig() {
-    const pr = SHOP.pigPrice();
-    if (G.S.money < pr) { sfx('ui_back'); say(TF('A pigment pack costs {money}', { money: fmtMoney(pr) })); return; }
-    G.addMoney(-pr, 'pigment'); const cards = SHOP.rollPig(() => RNG.f(), G.S.recipes); SHOP.openPig(cards); G.save();
-    sfx('card_flip'); P.pg = { cards: cards.map((c) => Object.assign({ at: -1, fx: 0 }, c)), next: 0, nextAt: PK_DEAL, done: -1 }; go('pigpack');
+  /** a POT PACK (round 13): five ready pots — four Satins and one better card (SHOP.rollPotPack), only in the finishes you know —
+   *  into the game at once (a closed app keeps them), then dealt face down and turned over one by one */
+  function buyPotPack() {
+    const pr = SHOP.potPackPrice();
+    if (G.S.money < pr) { sfx('ui_back'); say(TF('A pot pack costs {money}', { money: fmtMoney(pr) })); return; }
+    G.addMoney(-pr, 'paint'); const cards = SHOP.rollPotPack(() => RNG.f(), G.S.recipes); SHOP.openPotPack(cards); G.save();
+    sfx('card_flip'); P.pp = { cards: cards.map((c) => Object.assign({ at: -1, fx: 0 }, c)), next: 0, nextAt: PK_DEAL, done: -1 }; go('potpack');
   }
-  function updPig() {
-    const K = P.pg, t = P.pt, tap = IN.click || IN.pressed('confirm');
-    for (const c of K.cards) if (c.at >= 0 && !c.fx && t - c.at >= PK_FLIP * 0.5) { c.fx = 1; const g = pigGeom(), k = K.cards.indexOf(c), x = g.x0 + k * (g.cw + g.gap) + (g.cw >> 1), y = g.y0 + 30; burst(x, y, 6 + 5 * c.r, rcol(c.r)); if (c.r === 2) sfx('sparkle'); else if (c.r >= 3) { sfx('legendary_chime'); ENGINE.shake(2, 8); } else sfx('plip', { pitch: 1 + 0.3 * c.r }); }
+  function updPotPack() {
+    const K = P.pp, t = P.pt, tap = IN.click || IN.pressed('confirm');
+    for (const c of K.cards) if (c.at >= 0 && !c.fx && t - c.at >= PK_FLIP * 0.5) { c.fx = 1; const g = potPackGeom(), k = K.cards.indexOf(c), x = g.x0 + k * (g.cw + g.gap) + (g.cw >> 1), y = g.y0 + 30; burst(x, y, 6 + 5 * c.r, rcol(c.r)); if (c.r === 2) sfx('sparkle'); else if (c.r >= 3) { sfx('legendary_chime'); ENGINE.shake(2, 8); } else sfx('plip', { pitch: 1 + 0.3 * c.r }); }
     if (K.next < K.cards.length) {
       if (t >= K.nextAt || (tap && t > PK_DEAL * 0.6)) { K.cards[K.next++].at = t; sfx('card_flip'); const nx = K.cards[K.next]; K.nextAt = t + PK_GAP + (nx && K.next === K.cards.length - 1 && nx.r >= 2 ? 0.4 : 0); }
       return;
     }
     if (K.done < 0 && t - K.cards[K.cards.length - 1].at > PK_FLIP) K.done = t;
-    if (K.done >= 0 && t - K.done > 0.35 && tap) { IN.click = false; sfx('ui_select'); P.pg = null; P.mixTab = 'packs'; go('mix'); }
+    if (K.done >= 0 && t - K.done > 0.35 && tap) { IN.click = false; sfx('ui_select'); P.pp = null; P.ppBack = TIME; P.mixTab = 'packs'; go('mix'); }
   }
-  function pigGeom() { const n = P.pg ? P.pg.cards.length : SHOP.PIG.n, cw = 58, ch = 86, gap = 3; return { n, cw, ch, gap, x0: Math.round((W - n * cw - (n - 1) * gap) / 2), y0: VT + 18 }; }
+  function potPackGeom() { const n = P.pp ? P.pp.cards.length : SHOP.POTPACK.n, cw = 58, ch = 86, gap = 3; return { n, cw, ch, gap, x0: Math.round((W - n * cw - (n - 1) * gap) / 2), y0: VT + 18 }; }
   /** one slide of the tray: the pots move, merge and mix; the next drop falls in at the wall slid away from */
   function slideTray(dir) {
     const M = G.S.mix, r = TRAY.slide({ w: M.w || 4, h: M.h || 4, cells: M.cells }, dir, trayOpts());
@@ -10704,7 +10730,10 @@ const PROTO = {};
       if (L.length && P.rackKey && IN.pressed('confirm')) { const e = L[clamp(P.rackSel | 0, 0, L.length - 1)];   // (review: a pot that can't be picked, with the mix ready: ENTER STARTs)
         if (!(canStart() && (e.f >= LEG_F || P.load.pre.length >= preMax() || potsOf(e.h, e.f) - prePoured(e.h, e.f) <= 0))) { rackPick(e.key); return; } }
     }
-    if (P.mixTab === 'packs' && (b === 'pigbuy' || (IN.pressed('confirm') && !canStart()))) { buyPig(); return; }   // (ENTER buys a pack here, while the dropper can't start)
+    // (ENTER buys a pack here, while the dropper can't start. Not straight after a pack closed — its buy button sits where the
+    // fifth card was, so mashing through the cards bought pack after pack (the round-13 review): a tap or ENTER within 0.5 s pushes
+    // the wait on, and only a pause and a fresh tap buy)
+    if (P.mixTab === 'packs' && (b === 'ppbuy' || (IN.pressed('confirm') && !canStart()))) { if (TIME - (P.ppBack || -9) >= 0.5) buyPotPack(); else P.ppBack = TIME; return; }
     if (IN.pressed('confirm')) { if (!P.load.order.length && !P.load.pre.length && SHOP.dropsHeld()) mixAll(); else startMix(); }   // (TTA: ENTER on an empty dropper fills it first)
   }
   function updMix() {
@@ -10816,7 +10845,7 @@ const PROTO = {};
       case 'plans': updPlans(); break;
       case 'comm': updComm(); break;
       case 'mix': updMix(); break;
-      case 'pigpack': updPig(); break;
+      case 'potpack': updPotPack(); break;
       case 'letter': updLetter(); break;
       case 'back': updBack(); break;
       case 'auto': updAuto(); break;
@@ -10841,7 +10870,7 @@ const PROTO = {};
   // ------------------------------------------------------------------ drawing
   function drawFigureNow() {
     const J = P.J, ph = P.phase;
-    if (ph === 'sell' || ph === 'display' || ph === 'plans' || ph === 'comm' || ph === 'letter' || ph === 'back' || ph === 'mix' || ph === 'pigpack' || (EXT[ph] && !EXT[ph].figure)) return;
+    if (ph === 'sell' || ph === 'display' || ph === 'plans' || ph === 'comm' || ph === 'letter' || ph === 'back' || ph === 'mix' || ph === 'potpack' || (EXT[ph] && !EXT[ph].figure)) return;
     if ((ph === 'shop' || ph === 'pack') && P.shopSel < 0) { drawPackBox(); return; }
     if (ST.key === 'supply' && (ph === 'shop' || ph === 'pack')) {
       const f = FIGS[P.shopSel]; if (!HD.theme.need(f.s)) return;
@@ -11231,7 +11260,7 @@ const PROTO = {};
       shown.forEach((p, k) => { if (low[k]) textO(lab[k], Math.round(lx[k]), at(k)[1] + 10, p.f >= LEG_F ? C.Y6 : C.CRM1, C.UI0, FONT_S, 1, 1); });
       if (pots.length > 8) textO(TF('+{count} MORE', { count: pots.length - 8 }), px + pw - 6, VT + 98, C.CRM0, C.UI0, FONT_S, 1, 2);
       if (P.bottled.back) textO(TF(P.bottled.back === 1 ? '{count} DROP WENT BACK INTO ITS JAR' : '{count} DROPS WENT BACK INTO THEIR JARS', { count: P.bottled.back }), px + (pw >> 1), VT + 106, C.CRM0, C.UI0, FONT_S, 1, 1);
-    } else if (!M) {   // LOADING: four tabs — PIGMENTS (the jars, the dropper), RACK (pre-pour your pots), PACKS (pigment packs), RECIPES
+    } else if (!M) {   // LOADING: four tabs — PIGMENTS (the jars, the dropper), RACK (pre-pour your pots), PACKS (pot packs), RECIPES
       panel(px, VT + 4, pw, VB - VT - 8, null);
       [T('PIGMENTS'), T('RACK'), T('PACKS'), T('RECIPES')].forEach((t, k) => { const on = P.mixTab === MIX_TABS[k], w = 37, x = px + 4 + k * 38, y = VT + 7;
         P.btns.push({ id: 'mt' + k, x, y, w, h: 12, on: true }); rect(x, y, w, 12, on ? C.UI3 : C.UI1); rectb(x, y, w, 12, on ? C.Y5 : C.UI3); textO(t, x + (w >> 1), y + 3, on ? C.Y6 : C.CRM0, C.UI0, FONT_S, 1, 1); });
@@ -11327,15 +11356,22 @@ const PROTO = {};
     textO(TF('STARTS WITH IT · {count} / {max} POTS', { count: pre, max: preMax() }), px + (pw >> 1), VT + 108, C.CRM0, C.UI0, FONT_S, 1, 1);
     finLegend(px + (pw >> 1), VT + 118);
   }
-  /** PACKS: the pigment pack (five cards by rarity: drops into the jars, ready pots onto the rack, now and then a recipe card) */
+  /** PACKS: the POT PACK (round 13: five ready pots, four Satins and one better card, only in the finishes you know). Under it
+   *  what its pots cost mixed by hand (Alex: "it should always be cheaper to manually mix then to buy these packs") */
   function drawPacksTab(px, pw) {
-    const pr = SHOP.pigPrice(), od = SHOP.PIG.odds, ky = VT + 26;
+    const pr = SHOP.potPackPrice(), best = SHOP.potPackBest(G.S.recipes), ky = VT + 26, cx = px + (pw >> 1);
     rect(px + 4, ky, pw - 8, 30, C.UI1); rectb(px + 4, ky, pw - 8, 30, C.UI3); gem(px + 9, ky + 4, -1);
-    textO(T('PIGMENT PACK · 5 CARDS'), px + 20, ky + 3, C.Y6, C.UI0, FONT_S, 1, 0);
-    btn('pigbuy', fmtShort(pr), px + pw - 44, ky + 2, 40, 11, { primary: true, dim: G.S.money < pr });
-    [0, 1, 2, 3].forEach((r) => textO(`${T(RAR[r].name).slice(0, 1).toUpperCase()}${Math.round(od[r] * 100)}%`, px + 10 + r * 36, ky + 13, rcol(r), C.UI0, FONT_S, 1, 0));
-    textO(T('DROPS · POTS · A RECIPE'), px + (pw >> 1), ky + 21, C.CRM0, C.UI0, FONT_S, 1, 1);
-    textO(T('ITS DROPS GO INTO THE JARS,'), px + (pw >> 1), ky + 40, C.CRM0, C.UI0, FONT_S, 1, 1); textO(T('ITS POTS ONTO YOUR RACK'), px + (pw >> 1), ky + 48, C.CRM0, C.UI0, FONT_S, 1, 1);
+    textO(T('POT PACK · 5 POTS'), px + 20, ky + 3, C.Y6, C.UI0, FONT_S, 1, 0);
+    btn('ppbuy', fmtShort(pr), px + pw - 44, ky + 2, 40, 11, { primary: true, sel: !canStart(), dim: G.S.money < pr });   // (sel: the ring says ENTER buys, as START's does)
+    textO(TF('4 {finish} POTS AND ONE OF THESE:', { finish: T(FINS[SHOP.ppFin(0)].name).toUpperCase() }), cx, ky + 13, C.CRM0, C.UI0, FONT_S, 1, 1);
+    // the better card's chances in its rarity's colour (METALLIC 70% · PEARL 22% · RECIPE 8%), as your techniques make them
+    const items = best.map((b) => ({ t: `${b.recipe ? T('RECIPE') : T(FINS[b.f].name).toUpperCase()} ${Math.round(b.p * 100)}%`, c: rcol(b.recipe ? 3 : b.f - 1) }));
+    let x = cx - ((items.reduce((a, it) => a + textW(it.t, FONT_S), 0) + 8 * (items.length - 1)) >> 1);
+    for (const it of items) { textO(it.t, x, ky + 21, it.c, C.UI0, FONT_S, 1, 0); x += textW(it.t, FONT_S) + 8; }
+    textO(T('READY POTS ONTO YOUR RACK'), cx, ky + 38, C.CRM0, C.UI0, FONT_S, 1, 1);
+    if (best.some((b) => b.recipe)) textO(TF('A RECIPE CARD BRINGS A {finish} TOO', { finish: T(FINS[SHOP.ppFin(3)].name).toUpperCase() }), cx, ky + 46, C.CRM0, C.UI0, FONT_S, 1, 1);   // (in one of its colours, at your best finish: not one of its own Pearls before you know Pearl)
+    textO(TF('MIXED BY HAND: ABOUT {money}', { money: fmtMoney(Math.round(SHOP.potPackHand())) }), cx, ky + 58, C.CRM2, C.UI0, FONT_S, 1, 1);
+    textO(T('ONLY THE FINISHES YOU KNOW'), cx, ky + 66, C.UI5, C.UI0, FONT_S, 1, 1);
   }
   /** THE RECIPE BOOK: the Legendary paints — made (its name, its pots), known from a recipe card (its pots), or still a riddle */
   function drawBook(px, pw) {
@@ -11349,9 +11385,10 @@ const PROTO = {};
       if (n) textO('x' + n, px + pw - 6, y, C.G6, C.UI0, FONT_S, 1, 2);
     });
   }
-  /** the pigment pack opens: five cards (face down → a squash → face up: drops, two ready pots, or a Legendary recipe) */
-  function drawPigUI() {
-    const K = P.pg, t = P.pt, g = pigGeom();
+  /** the pot pack opens: five cards (face down → a squash → face up: a ready pot, or a Legendary recipe and a pot in one of its
+   *  colours) */
+  function drawPotPackUI() {
+    const K = P.pp, t = P.pt, g = potPackGeom();
     remapRect(0, VT, W, VB - VT, DARK[3]);
     K.cards.forEach((c, k) => {
       const x = g.x0 + k * (g.cw + g.gap), dealt = clamp((t - k * 0.08) / 0.3, 0, 1); if (dealt <= 0) return;
@@ -11363,17 +11400,11 @@ const PROTO = {};
       rrect(xx, y, w, g.ch, C.UI1); rrectb(xx, y, w, g.ch, col); rectb(xx + 1, y + 1, w - 2, g.ch - 2, rp[Math.max(0, rp.length - 4)]);
       if (w < g.cw) return;
       ellf(cx, y + 34, 21, 22, rp[1]);
-      // what the card gives, said whole: the drops (their colour), the two ready pots (their finishes, and colours when they
-      // differ), a recipe (the Legendary paint now in your book) and the Pearl pot that comes with it
-      let l1 = '', l2 = '';
-      if (c.recipe) { const r = TRAY.RECIPE[c.recipe], pp = (c.pots || [])[0]; drawPot(cx - (pp ? 6 : 0), y + 30, { h: 'leg', f: 5, leg: c.recipe }, 11); if (pp) drawPot(cx + 14, y + 38, pp, 6); l1 = T(r.name).toUpperCase(); l2 = pp ? T('RECIPE! + A PEARL') : T('RECIPE!'); }
-      else if (c.drops) { const h = Object.keys(c.drops)[0]; drawPot(cx, y + 32, { h, f: 0 }, 11); l1 = TF('{count} DROPS', { count: c.drops[h] }); l2 = T(HUE_NAME[h]).toUpperCase(); }
-      else if (c.pots) {
-        c.pots.forEach((p, i) => drawPot(cx - 9 + i * 18, y + 32, p, 8));
-        const same = c.pots.every((p) => p.h === c.pots[0].h), fins = c.pots.every((p) => p.f === c.pots[0].f);
-        l1 = fins ? TF('{finish} x2', { finish: T(FINS[c.pots[0].f].name).toUpperCase() }) : c.pots.map((p) => T(FINS[p.f].name).toUpperCase()).join(' + ');
-        l2 = same ? T(HUE_NAME[c.pots[0].h]).toUpperCase() : c.pots.map((p) => T(HUE_NAME[p.h]).toUpperCase()).join(' + ');
-      }
+      // what the card gives, said whole: the pot (its finish, its colour), or a recipe (the Legendary paint now in your book) and
+      // the pot that comes with it
+      let l1 = '', l2 = ''; const pp = (c.pots || [])[0];
+      if (c.recipe) { const r = TRAY.RECIPE[c.recipe]; drawPot(cx - (pp ? 6 : 0), y + 30, { h: 'leg', f: 5, leg: c.recipe }, 11); if (pp) drawPot(cx + 14, y + 38, pp, 6); l1 = T(r.name).toUpperCase(); l2 = pp ? TF('RECIPE! + A {finish}', { finish: T(FINS[pp.f].name).toUpperCase() }) : T('RECIPE!'); }
+      else if (pp) { drawPot(cx, y + 32, pp, 11); l1 = T(FINS[pp.f].name).toUpperCase(); l2 = T(HUE_NAME[pp.h]).toUpperCase(); }
       // the words, stacked up from the rarity line (a line too wide for the card splits in two: SATIN + / METALLIC)
       const split = (t) => { const ws = t.split(' '); if (textW(t, FONT_S) <= g.cw - 4 || ws.length < 2) return [t]; const k = Math.ceil(ws.length / 2); return [ws.slice(0, k).join(' '), ws.slice(k).join(' ')]; };
       const rows = split(l1).map((t) => [t, C.CRM2]).concat(split(l2).map((t) => [t, C.CRM1]));
@@ -11381,11 +11412,11 @@ const PROTO = {};
       textO(T(RAR[c.r].card), cx, y + g.ch - 9, col, C.UI0, FONT_S, 1, 1);
     });
     if (K.done >= 0 && t - K.done > 0.35) {
-      textO(T('INTO YOUR PIGMENTS AND RACK'), W / 2, g.y0 + g.ch + 8, C.Y6, C.UI0, FONT_M, 1, 1);
+      textO(K.cards.some((c) => c.recipe) ? T('ONTO YOUR RACK, THE RECIPE INTO YOUR BOOK') : T('ONTO YOUR RACK'), W / 2, g.y0 + g.ch + 8, C.Y6, C.UI0, FONT_M, 1, 1);
       if (((t * 1.6) | 0) % 2 === 0) textO(IN.touch ? T('TAP TO CONTINUE') : T('CLICK OR ENTER TO CONTINUE'), W / 2, g.y0 + g.ch + 19, C.CRM1, C.UI0, FONT_S, 1, 1);
     }
     bottom();
-    textO(T('Pigment pack'), 6, VB + 5, C.Y6, C.UI0, FONT_M, 1, 0);
+    textO(T('Pot pack'), 6, VB + 5, C.Y6, C.UI0, FONT_M, 1, 0);
     if (K.next < K.cards.length) textO(IN.touch ? T('Tap to flip the next card') : T('Click to flip the next card'), W - 6, VB + 5, C.CRM1, C.UI0, FONT_M, 1, 2);
   }
   /** the commission board: the letters pinned on the cork (room_comm: the cork fills x 76..244, y 31..157) */
@@ -11557,7 +11588,7 @@ const PROTO = {};
     P.xpAt = hx - 3;   // (the +N XP note: drawn with the pops, over the station's UI)
     // (M6 review: a step title too long to clear the LV badge — GRUNDFARBE · FENSTERLÄDEN with a 7-digit purse — takes the small font)
     const st0 = stepTitle(), stF = W / 2 - (textW(st0, FONT_M) >> 1) < hx - 3 ? FONT_S : FONT_M;
-    const nq = (G.S.q || []).length, ttl = ph === 'pigpack' ? null : stationTitle(ph), tl = ttl ? W / 2 + 14 - (textW(ttl, FONT_M) >> 1) : W / 2 - (textW(st0, stF) >> 1);   // (the pigment pack's title is centred: no back button)
+    const nq = (G.S.q || []).length, ttl = ph === 'potpack' ? null : stationTitle(ph), tl = ttl ? W / 2 + 14 - (textW(ttl, FONT_M) >> 1) : W / 2 - (textW(st0, stF) >> 1);   // (the pot pack's title is centred: no back button)
     const room = (hd) => hx + 10 + textW(hd, FONT_S) < tl - 2;   // (customers waiting: a little head and how many, where the title leaves room)
     if (nq && room('x' + nq) && ph !== 'sell' && ph !== 'back') { const bob = P.bellT !== undefined && TIME - P.bellT < 1 ? Math.round(Math.sin((TIME - P.bellT) * 16) * 1.5) : 0; waitHead(hx + 3, 8 + bob, G.S.q.reduce((a, c) => ((c.cr | 0) > (a.cr | 0) ? c : a), G.S.q[0])); textO('x' + nq, hx + 8, 6, C.CRM1, C.UI0, FONT_S, 1, 0); }
     if (ph === 'sell' || ph === 'back') { textO(ph === 'back' ? T('THE BACK ROOM') : T('THE COUNTER'), W / 2 + 14, 5, C.CRM2, C.UI0, FONT_M, 1, 1); const nq2 = Math.max(0, (G.S.q || []).length - 1); if (nq2 && room('+' + nq2)) { waitHead(hx + 3, 8, G.S.q[1]); textO('+' + nq2, hx + 8, 6, C.CRM1, C.UI0, FONT_S, 1, 0); } signBtn(W - 50, 2); return; }
@@ -11565,7 +11596,7 @@ const PROTO = {};
     if (ph === 'comm' || ph === 'letter') { textO(T('COMMISSIONS'), W / 2 + 14, 5, C.CRM2, C.UI0, FONT_M, 1, 1); textO(`${(G.S.comm || []).length} / ${SHOP.commSlots()}`, W - 6, 5, C.CRM1, C.UI0, FONT_M, 1, 2); return; }
     if (ph === 'display') { textO(T('THE DISPLAY SHELF'), W / 2 + 14, 5, C.CRM2, C.UI0, FONT_M, 1, 1); textO(`${G.S.kept.length} / ${shelfCap()}`, W - 6, 5, C.CRM1, C.UI0, FONT_M, 1, 2); return; }
     if (EXT[ph] && EXT[ph].title) { textO(T(EXT[ph].title), W / 2 + 14, 5, C.CRM2, C.UI0, FONT_M, 1, 1); if (EXT[ph].right) textO(EXT[ph].right(), W - 6, 6, C.CRM1, C.UI0, FONT_S, 1, 2); return; }
-    if (ph === 'pigpack') { textO(T('A PIGMENT PACK!'), W / 2, 5, C.CRM2, C.UI0, FONT_M, 1, 1); return; }
+    if (ph === 'potpack') { textO(T('A POT PACK!'), W / 2, 5, C.CRM2, C.UI0, FONT_M, 1, 1); return; }
     if (ph === 'mix') { textO(T('THE MIXING TABLE'), W / 2 + 14, 5, C.CRM2, C.UI0, FONT_M, 1, 1); textO(TF('SWATCHES {count}', { count: Object.keys(G.S.swatch || {}).length }), W - 6, 6, C.CRM1, C.UI0, FONT_S, 1, 2); return; }
     if (ph === 'reveal' || ph === 'after' || ph === 'out') stamp();
     else textO(st0, W / 2, stF === FONT_S ? (si < 0 ? 6 : 4) : si < 0 ? 5 : accentUp(st0, FONT_M) ? 3 : 2, C.CRM2, C.UI0, stF, 1, 1);   // (y 2 over the pips: an umlaut's dots would leave the screen)
@@ -11583,7 +11614,7 @@ const PROTO = {};
       case 'comm': case 'letter': return T('COMMISSIONS');
       case 'display': return T('THE DISPLAY SHELF');
       case 'mix': return T('THE MIXING TABLE');
-      case 'pigpack': return T('A PIGMENT PACK!');
+      case 'potpack': return T('A POT PACK!');
       default: return EXT[ph] && EXT[ph].title ? T(EXT[ph].title) : null;
     }
   }
@@ -11976,7 +12007,7 @@ const PROTO = {};
       case 'plans': drawPlansUI(); break;
       case 'comm': drawCommUI(); break;
       case 'mix': drawMixUI(); break;
-      case 'pigpack': drawPigUI(); break;
+      case 'potpack': drawPotPackUI(); break;
       case 'letter': drawCommUI(); drawLetterUI(); break;
       case 'back': drawSellUI(true); P.btns.length = 0; hud(); drawBackUI(); break;
       case 'auto': prompt('chip', T('Tom paints it for you…')); break;
@@ -12002,7 +12033,7 @@ const PROTO = {};
   Object.assign(PROTO, { P, ST, resetLoad, ext: (ph, def) => { EXT[ph] = def; }, station: (key, enter) => { STX[key] = enter; }, go, say, pop, sfx, burst, btn, hitBtn, overUI,
     panel, bottom, band, prompt, looks, figIdx, FIGS, RAR, rcol, fmtShort, fmtNum, gainXP, toRoom, toStation, mark, chip, drawPot, coinIcon, boostIcon,
     pctB, boostName, BOOST_COL, tent, shadowEll, blitClip, listPiece, auctionsFull, buildShelf, alsoWide, shelfNow: () => { buildShelf(); for (const m of R.shelf) if (m) m.fade = 1; }, backdrop, PTR, holdAny, newHold, aimRing, webOpen, potsOfHue, dissolveBlit, lock, gem, emblem, orderIcon, hueRamp });
-  if (typeof DEV !== 'undefined') DEV.proto = { debugState: (p) => debugState(p), slideTray, bottleTray, addDrop, buyPigment, mixAll, startMix, undoMix, clearLoad, rackPick, wellTap, rackList, load: () => P.load, trayCell: (i) => { const g = TG(), [x, y] = cellXY(i); return [x + (g.cell >> 1), y + (g.cell >> 1), g.r]; }, usable, ALLH, LEGS, buyPot, buyPig, isFree, potsOf, buyPack, P, FIGS, FINS, RAR, PACK, packPrice, packWorth, costOf, AIM, valueOf, quality, recipe, rollPack, nSteps, oslColour, shelfFades: () => R.shelf.map((m) => (m ? m.fade : -1)), R, emblem, ICON_ART, ptr: () => JSON.stringify([...PTR]), ST, CASE_SLOTS, caseSlot, offerAt, toCase, buyPlan, figIdx, gradeOf, masterQ, bringForward, slotX, fitting, flipSign, applyLamp, timing: () => ({ WIN, CRISP, PERFECT, GOOD, WASH_OK, WASH_WIN }), tipBtn, TIP, POINT_STEPS };
+  if (typeof DEV !== 'undefined') DEV.proto = { debugState: (p) => debugState(p), slideTray, bottleTray, addDrop, buyPigment, mixAll, startMix, undoMix, clearLoad, rackPick, wellTap, rackList, load: () => P.load, trayCell: (i) => { const g = TG(), [x, y] = cellXY(i); return [x + (g.cell >> 1), y + (g.cell >> 1), g.r]; }, usable, ALLH, LEGS, buyPot, buyPotPack, isFree, potsOf, buyPack, P, FIGS, FINS, RAR, PACK, packPrice, packWorth, costOf, AIM, valueOf, quality, recipe, rollPack, nSteps, oslColour, shelfFades: () => R.shelf.map((m) => (m ? m.fade : -1)), R, emblem, ICON_ART, ptr: () => JSON.stringify([...PTR]), ST, CASE_SLOTS, caseSlot, offerAt, toCase, buyPlan, figIdx, gradeOf, masterQ, bringForward, slotX, fitting, flipSign, applyLamp, timing: () => ({ WIN, CRISP, PERFECT, GOOD, WASH_OK, WASH_WIN }), tipBtn, TIP, POINT_STEPS };
 
   // ================================================================== the title: the room, a finished hero, the name
   const TT = { J: null, t: 0, arm: 0, btns: [] };
