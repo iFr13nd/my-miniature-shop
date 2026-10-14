@@ -10526,7 +10526,7 @@ const PROTO = {};
   const cellXY = (i) => { const g = TG(); return [g.x + g.pad + (i % g.w) * (g.cell + g.gap), g.y + g.pad + ((i / g.w) | 0) * (g.cell + g.gap)]; };
   const mixOn = () => !!(G.S.mix && Array.isArray(G.S.mix.cells));
   const trayOpts = () => ({ top: SHOP.topFin() });   // M4: your techniques: the highest finish your tray makes
-  function enterMix() { P.dis = 0; P.mixHue = P.mixHue || 0; P.mixAnim = null; P.bottled = null; P.swipe = null; P.mixTab = P.mixTab || 'jars'; P.jarOpen = null; P.jarOpt = 0; P.jarKey = false; P.rackKey = false; go('mix'); }
+  function enterMix() { P.dis = 0; P.mixHue = P.mixHue || 0; P.mixAnim = null; P.bottled = null; P.swipe = null; P.mixTab = P.mixTab || 'jars'; P.jarOpen = null; P.jarOpt = 0; P.jarKey = false; P.rackKey = false; P.rackGhost = null; go('mix'); }
   /** the colour a jar would be made of (ONE COLOUR: any of the eight; TINT / SHADE: a colour, not white or black) */
   const jarHue = (k) => { const id = SHOP.JARS[k].id, h = HUES[P.mixHue | 0]; return id === 'prim' ? null : (id === 'tint' || id === 'shade') && (h === 'W' || h === 'K') ? null : h; };
   /** what a TINT / SHADE jar makes of the chosen colour ('ROS'), or null */
@@ -10593,7 +10593,7 @@ const PROTO = {};
     if (M.q.length) { if (mine) for (const h of M.q) G.S.drops[h] = (G.S.drops[h] | 0) + 1; else if (M.paid) G.addMoney(Math.round(M.paid * M.q.length / n0), 'pigment'); }
     const b = TRAY.bottle({ w: M.w || 4, h: M.h || 4, cells: M.cells }, []);
     for (const p of b.pots) { if (p.f >= TRAY.LEG) G.S.legs[p.leg] = (G.S.legs[p.leg] | 0) + 1; else G.S.pots[p.h + p.f] = potsOf(p.h, p.f) + 1; }
-    P.bottled = { pots: b.pots, t: 0 }; G.S.mix = null; G.save();
+    P.bottled = { pots: b.pots, t: 0 }; G.S.mix = null; P.rackGhost = null; G.save();
     sfx(b.pots.length ? 'pour' : 'ui_back'); if (b.pots.some((p) => p.f >= 3)) sfx('sparkle');
   }
   const overTray = (x, y) => { const g = TG(); return x >= g.x && x < g.x + g.tw && y >= g.y && y < g.y + g.th; };
@@ -10607,7 +10607,11 @@ const PROTO = {};
   /** YOUR RACK as its shelves show it: the Legendary paints first, then the rarest finish, then by colour → [{ h, f, leg, n, key }] */
   function rackList() {
     const legs = Object.keys(G.S.legs || {}).filter((id) => G.S.legs[id] > 0).map((id) => ({ h: 'leg', f: LEG_F, leg: id, n: G.S.legs[id], key: 'leg:' + id }));
-    const pots = potList().map((q) => ({ h: q.h, f: q.f, n: q.n, key: q.h + q.f })).sort((x, y) => y.f - x.f || ALLH.indexOf(x.h) - ALLH.indexOf(y.h));
+    const pots = potList().map((q) => ({ h: q.h, f: q.f, n: q.n, key: q.h + q.f })), have = new Set(pots.map((q) => q.key));
+    // a pot poured to its last keeps its place, empty, until BOTTLE or leaving the table: the shelves never shift under the finger
+    // (the next tap there says none is left, instead of pouring the pot that slid into its spot)
+    for (const k of P.rackGhost || []) { const m = /^(.*?)(\d)$/.exec(k); if (m && !have.has(k)) pots.push({ h: m[1], f: +m[2], n: 0, key: k }); }
+    pots.sort((x, y) => y.f - x.f || ALLH.indexOf(x.h) - ALLH.indexOf(y.h));
     return legs.concat(pots);
   }
   const rackPer = () => 24;   // (a page of bottles: 8 x 3, in the RACK tab and while mixing — the same shelves, in the same place)
@@ -10618,11 +10622,12 @@ const PROTO = {};
   function rackToTray(key) {
     if (String(key).startsWith('leg:')) { sfx('ui_back'); say(T('A Legendary paint never mixes again')); return false; }
     const m = /^(.*?)(\d)$/.exec(String(key)); if (!m) return false;
-    const h = m[1], f = +m[2]; if (f < 1 || f >= LEG_F || potsOf(h, f) <= 0) return false;
+    const h = m[1], f = +m[2]; if (f < 1 || f >= LEG_F) return false;
+    if (potsOf(h, f) <= 0) { sfx('ui_back'); say(T('None of that pot left')); return false; }
     if (!mixOn()) { const t = SHOP.tableAt(); G.S.mix = { cells: new Array(t.cols * t.rows).fill(null), q: [], jar: 'rack', paid: 0, n: 0, w: t.cols, h: t.rows }; P.dis = 0; P.bottleArm = 0; P.mixAnim = null; P.mixNext = null; }
     const M = G.S.mix, i = M.cells.findIndex((c) => !c);
     if (i < 0) { sfx('ui_back'); say(T('No empty well: slide or bottle first')); return false; }
-    M.cells[i] = { h, f }; G.S.pots[h + f] = potsOf(h, f) - 1;   // (no label pops up: two poured side by side would print over each other)
+    M.cells[i] = { h, f }; G.S.pots[h + f] = potsOf(h, f) - 1; (P.rackGhost || (P.rackGhost = new Set())).add(h + f);   // (no label pops up: two poured side by side would print over each other)
     sfx('pour'); G.save(); return true;
   }
   function updMix() {
@@ -11252,8 +11257,9 @@ const PROTO = {};
       const bx = x + (k % cols) * 18, by = y + ((k / cols) | 0) * 18;
       P.btns.push({ id: 'rk:' + e.key, x: bx - 1, y: by - 1, w: 17, h: 17, on: true });
       if (pg * per + k === sel) rectb(bx - 2, by - 2, 19, 19, C.Y7);
-      drawBottle(bx + 4, by + 14, e, 's');
-      textO(String(e.n), bx + 17, by + 8, C.CRM2, C.UI0, FONT_S, 1, 2);   // (right-aligned in its 18 px: clear of the next bottle — review)
+      if (e.n > 0) drawBottle(bx + 4, by + 14, e, 's');
+      else sprite(BOTTLE.s.rows, bx, by + 2, (k) => (k === 'o' ? C.UI3 : k === 'c' ? C.UI2 : k === 'b' ? C.UI2 : C.UI1));   // (emptied: its place kept)
+      textO(String(e.n), bx + 17, by + 8, e.n > 0 ? C.CRM2 : C.UI4, C.UI0, FONT_S, 1, 2);   // (right-aligned in its 18 px: clear of the next bottle — review)
     });
     return { n: L.length, pages, pg };
   }
