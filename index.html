@@ -9699,7 +9699,7 @@ const PROTO = {};
   const easeIO = (t) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
   function sfx(n, o) { AUDIO.sfx(n, o); }
   const P = { phase: 'pick', pt: 0, sel: 0, shopSel: 0, J: null, hue: 0, fin: 0, armBuy: -1, focus: 0, btns: [], pops: [], miss: [], msg: '', msgT: 0, swipeY: -1, out: null, rot: 0, dis: 1, pk: null, misses: 0 };
-  function go(ph) { P.phase = ph; P.pt = 0; P.armBuy = -1; P.focus = 0; }
+  function go(ph) { P.phase = ph; P.pt = 0; P.armBuy = -1; P.focus = 0; P.bandK = null; }   // (bandK: the counter's buttons wait again — SELL_ARM)
   function pop(text, x, y, col) { P.pops.push({ text, x, y, col, t: 0 }); if (P.pops.length > 6) P.pops.shift(); }
   function say(m) { P.msg = m; P.msgT = 0; }
   // ---- language (round 10): every word the player sees goes through T() / TF() (kit/engine/engine.js I18N; the German is
@@ -10743,6 +10743,11 @@ const PROTO = {};
   /** where counter slot k of n stands (its feet), across the whole counter top (room_counter: the top spans the frame) */
   const COUNTER_FEET = 150;
   const slotX = (k, n) => Math.round(160 + (k - (n - 1) / 2) * Math.min(64, 300 / n));
+  /** after round 15 (the round-14 review's older trap): a chosen piece brings up the bottom band's buttons — the price plaques
+   *  when someone waits, DISPLAY and AUCTION when nobody does — right under a piece low on the counter, so a double tap on it
+   *  sold it at the plaque under the finger. They take a tap only SELL_ARM s after they came up (a piece chosen, a customer
+   *  stepping up, an answer over: up again); keys need no wait */
+  const SELL_ARM = 0.35;
   /** the shop sign: OPEN (customers come in) or CLOSED (nobody new comes, and whoever waits goes home: SHOP.setOpen; the one at
    *  the counter says goodbye on the way out) */
   function flipSign() {
@@ -10761,6 +10766,8 @@ const PROTO = {};
     P.dis = Math.min(1, P.dis + TICK * 3); P.cuIn = Math.min(1, P.cuIn + TICK * 3.5);
     { const n0 = Math.min(slotsN(), G.S.stock.length), tp = P.sellSel >= 0 && P.sellSel < n0 ? G.S.stock[P.sellSel] : null;   // round 14: the chosen piece turns
       if (tp !== P.turnP) { P.turnP = tp; P.sellRot = TURN_SOON; } else P.sellRot += TICK; }
+    { const cu0 = custNow(), k = P.sellSel + '|' + (P.react ? 1 : 0); if (k !== P.bandK || cu0 !== P.bandCu) { P.bandK = k; P.bandCu = cu0; P.bandT = 0; } else P.bandT += TICK; }   // (the bottom band's buttons: SELL_ARM)
+    const armed = P.bandT >= SELL_ARM;
     const b = hitBtn(), list = G.S.stock, n = Math.min(slotsN(), list.length), cu = custNow();
     if (b === 'sign' || IN.keyPressed('KeyO')) { flipSign(); return; }
     if (P.react) {   // the customer answers; after a sale, a second no or a goodbye they leave, and the next one steps up
@@ -10781,12 +10788,12 @@ const PROTO = {};
     if (cu && (b === 'away' || IN.keyPressed('KeyN'))) { leaves(cu, { ok: false, text: T('ANOTHER TIME, THEN!') }); sfx('door', { vol: 0.6 }); return; }
     const p = P.sellSel >= 0 && P.sellSel < n ? list[P.sellSel] : null;
     if (p && cu) {
-      let k = -1; if (b && b.startsWith('pl')) k = +b.slice(2);
+      let k = -1; if (b && b.startsWith('pl') && armed) k = +b.slice(2);
       for (let i = 0; i < 4; i++) if (IN.keyPressed('Digit' + (i + 1))) k = i;
       if (IN.pressed('confirm')) k = 1;   // Enter: FAIR
       if (k >= 0) offerAt(k);
-    } else if (p && b === 'list') { if (listPiece('stock', P.sellSel)) P.sellSel = -1; }
-    else if (p && (b === 'display' || IN.pressed('confirm'))) toCase(P.sellSel);
+    } else if (p && b === 'list' && armed) { if (listPiece('stock', P.sellSel)) P.sellSel = -1; }
+    else if (p && ((b === 'display' && armed) || IN.pressed('confirm'))) toCase(P.sellSel);
   }
   // ---- THE BACK ROOM: the pieces that don't fit on the counter; tap one and it takes the chosen counter piece's place
   const BACK_PER = 10;
@@ -12625,7 +12632,7 @@ const PROTO = {};
     panel, bottom, band, prompt, looks, figIdx, FIGS, RAR, rcol, fmtShort, fmtNum, gainXP, toRoom, toStation, mark, chip, drawPot, coinIcon, boostIcon,
     pctB, boostName, BOOST_COL, tent, shadowEll, blitClip, listPiece, auctionsFull, buildShelf, alsoWide, shelfNow: () => { buildShelf(); for (const m of R.shelf) if (m) m.fade = 1; }, backdrop, PTR, holdAny, newHold, aimRing, webOpen, potsOfHue, dissolveBlit, lock, gem, emblem, orderIcon, hueRamp, roomSprite, shrinkBox });
   if (typeof DEV !== 'undefined') DEV.proto = { debugState: (p) => debugState(p), slideTray, bottleTray, addDrop, buyPigment, mixAll, startMix, undoMix, clearLoad, rackPick, wellTap, rackList, load: () => P.load, trayCell: (i) => { const g = TG(), [x, y] = cellXY(i); return [x + (g.cell >> 1), y + (g.cell >> 1), g.r]; }, usable, ALLH, LEGS, buyPot, buyPotPack, isFree, potsOf, buyPack, P, FIGS, FINS, RAR, PACK, packPrice, packWorth, costOf, AIM, valueOf, quality, recipe, rollPack, nSteps, oslColour, shelfFades: () => R.shelf.map((m) => (m ? m.fade : -1)), R, emblem, ICON_ART, ptr: () => JSON.stringify([...PTR]), ST, CASE_SLOTS, caseSlot, offerAt, toCase, buyPlan, figIdx, gradeOf, masterQ, bringForward, slotX, fitting, flipSign, applyLamp, timing: () => ({ WIN, CRISP, PERFECT, GOOD, WASH_OK, WASH_WIN }), tipBtn, TIP, POINT_STEPS,
-    turnAt, idleFrame, IDLE_HOLD, IDLE_TURN, TURN_SOON, SPIN, BTNS_AT, CARD_K, BENCH_CAM, SHRINK, shrinkLayer, smallView, pieceTurn, pieceDots, eyeDots, openZoom, ZOOM_IN, ZOOM_OUT, ZOOM_ARM, looks,
+    turnAt, idleFrame, IDLE_HOLD, IDLE_TURN, TURN_SOON, SPIN, BTNS_AT, CARD_K, BENCH_CAM, SHRINK, shrinkLayer, smallView, pieceTurn, pieceDots, eyeDots, openZoom, ZOOM_IN, ZOOM_OUT, ZOOM_ARM, SELL_ARM, looks,
     paintName, BASES, VT, VB, zoomE, hash, blitZoomed };
 
   // ================================================================== the title: the room, a finished hero, the name
