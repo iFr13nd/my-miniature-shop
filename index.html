@@ -8506,6 +8506,9 @@ const TRAY = (() => {
      enough for a piece that meets it (a little over, sometimes a lot), so there is always something that sells.
    OFFER a piece from the counter: each line it meets gets a tick. Then a plaque: FRIEND x0.8 · FAIR x1 · DEAR x1.25 · STEEP
      x1.5 the piece's tag. They pay if price <= min(purse, tag x (0.85 + 0.65 x the share of lines met) x will x mood).
+     Or MATCH (round 20, Alex: "at counter add a button in which i can match the price of the customer"): the customer names
+     their own price for the piece — 82-98% of the most they'd pay, by their mood, between FRIEND's and STEEP's — and a match is
+     always a sale that costs no stars for its price (the plaques stay the gamble for more).
    THE COUNTER shows counterSlots() pieces (the COUNTER upgrade adds more); the rest wait in the back and move up as pieces sell.
    COMMISSIONS: a patron's detailed order is pinned to the commission board every commEvery() s of play (up to commSlots());
      deliver a piece that meets every line for a big reward: COMM_PAY x its tag in coins, and a lot of XP. Every letter asks
@@ -8574,7 +8577,7 @@ const SHOP = (() => {
     50800, 54500, 58600, 62800, 67100, 71600, 76100, 80800, 85700, 90700, 95800, 101000, 106300, 111800, 117500, 123200, 129100, 135100, 141200, 147500, 153900, 160400, 167100, 173900, 180800, 187900, 195000, 202300, 209800];
   const KILLS = WOW_XP.map((x, i) => x / (45 + 5 * (i + 1))), KILLS_ALL = KILLS.reduce((a, b) => a + b, 0);
   const minutesFor = (L) => (L >= 1 && L < MAX_LVL ? KILLS[L - 1] / KILLS_ALL * HOURS * 60 : 0);
-  const XP_RATE = 28.5;   // XP a minute at tier 1 for a sensible player (calibrated with tools/econ_sim.mjs: level 60 in ~240 h; M5: x1.04 with the Legendaries' coins; round 12: 32.1 → 31.0 — rares only out of packs, the drops back into the jars; round 18: 31.0 → 28.5 — two or three of a pack's five cards are other sets' now: customers ask for the sets you have opened, so fewer sell at the counter and more are auto-painted; 12 runs: level 50 at 158-161 h, level 60 at ~240 h)
+  const XP_RATE = 28.5;   // XP a minute at tier 1 for a sensible player (calibrated with tools/econ_sim.mjs: level 60 in ~240 h; M5: x1.04 with the Legendaries' coins; round 12: 32.1 → 31.0 — rares only out of packs, the drops back into the jars; round 18: 31.0 → 28.5 — two or three of a pack's five cards are other sets' now: customers ask for the sets you have opened, so fewer sell at the counter and more are auto-painted; 12 runs: level 50 at 158-161 h, level 60 at ~240 h; round 20: MATCH at the counter (never under FRIEND's price) leaves the curve where it was — 12 runs at 28.5)
   /** the first levels need less than the straight scale: the shop's XP sources open one by one (the notebook at level 2,
    *  commissions at 4) and the display shelf's boosts build up, so a sensible player earns less a minute at first (x0.5 at
    *  level 1, x0.76 at 10, x0.95 at 30, ~x1 from 50: fitted with tools/econ_sim.mjs to WoW's shape, round 8; M5: 0.53, with
@@ -8866,16 +8869,19 @@ const SHOP = (() => {
   const halfStar = (s) => Math.max(1, Math.min(5, Math.round(s * 2) / 2));
   /** the stars of a visit to the counter that ended in a sale (r = offer()'s answer, k = the plaque, tries = the noes before):
    *  3, +2 x the share of the order the piece met; FRIEND +0.5, FAIR 0, DEAR -0.5, STEEP -1; each no before -0.5 */
-  const saleStars = (r, k, tries) => halfStar(3 + 2 * (r.n ? r.met / r.n : 0.5) + [0.5, 0, -0.5, -1][k] - 0.5 * (tries | 0));
+  const saleStars = (r, k, tries) => halfStar(3 + 2 * (r.n ? r.met / r.n : 0.5) + (k === MATCH ? matchAdj(r.ratio) : [0.5, 0, -0.5, -1][k]) - 0.5 * (tries | 0));
+  /** round 20: a sale at the customer's own price (MATCH) — they named it, so its price costs no stars; one under the tag earns a
+   *  little, as FRIEND does (+0.5 at 0.8 of the tag, nothing from the tag up) */
+  const MATCH = 'match', matchAdj = (ratio) => Math.max(0, Math.min(0.5, Math.round(250 * (1 - (ratio || 1))) / 100));   // (in hundredths: 0.8 of the tag is +0.5, not 0.4999…)
   /** sent away with nothing (NOT TODAY): 2.5, -0.5 for each no before it */
   const awayStars = (tries) => halfStar(2.5 - 0.5 * (tries | 0));
   const NOES_STARS = 1.5, LETTER_STARS = 5, TORN_STARS = 2.5;   // two noes and gone; a letter's piece delivered; a letter torn up
   /** what a visit leaves behind, in a few words (English keys: the panel translates them) */
   const WORDS = { perfect: N_('JUST WHAT I WANTED!'), good: N_('A LOVELY PIECE'), dear: N_('LOVELY, BUT PRICEY'), off: N_('NOT QUITE WHAT I ASKED FOR'), fine: N_('NICE ENOUGH'),
-    away: N_('NOTHING FOR ME TODAY'), noes: N_('FAR TOO DEAR FOR ME'), notleg: N_('I ONLY COLLECT LEGENDARIES'), letter: N_('MADE TO THE LETTER!'), torn: N_('MY LETTER WAS TORN UP'),
+    away: N_('NOTHING FOR ME TODAY'), noes: N_('FAR TOO DEAR FOR ME'), deal: N_('A FAIR DEAL'), notleg: N_('I ONLY COLLECT LEGENDARIES'), letter: N_('MADE TO THE LETTER!'), torn: N_('MY LETTER WAS TORN UP'),
     parcel: [N_('BROKEN IN THE POST!'), N_('A BIT SQUASHED'), N_('IT ARRIVED'), N_('SAFE AND SOUND'), N_('PACKED WITH LOVE!')] };
   /** a sale's words: what the piece met, what it cost */
-  const saleWords = (r, k, s) => (r.perfect ? WORDS.perfect : k >= 2 && s < 4 ? WORDS.dear : r.n && r.met / r.n < 0.5 ? WORDS.off : s >= 4 ? WORDS.good : WORDS.fine);
+  const saleWords = (r, k, s) => (r.perfect ? WORDS.perfect : k === MATCH ? (r.n && r.met / r.n < 0.5 ? WORDS.off : WORDS.deal) : k >= 2 && s < 4 ? WORDS.dear : r.n && r.met / r.n < 0.5 ? WORDS.off : s >= 4 ? WORDS.good : WORDS.fine);
   /** a visit's stars into the rating: k = 'c' | 'm' | 'p', s = 1..5, who = the customer's kind, a patron's or a bidder's name
    *  (an English key or a name), why = their words (an English key) → the stars, in halves */
   function rate(k, s, who, why) {
@@ -9063,6 +9069,17 @@ const SHOP = (() => {
     const n = orderOf(cu).length, share = n ? matches(cu, p) / n : 0.5; return Math.min(cu.purse, tagNow(p) * (0.85 + 0.65 * share) * (cu.will || 1) * cu.mood);
   };
   const priceOf = (p, k) => Math.max(1, Math.round(tagNow(p) * PLAQUES[k].k));
+  /** round 20: the customer's own price for piece p (MATCH): what they say they'd pay — 82-98% of the most they would (willing), by
+   *  their mood (a cheerful one names a price near their limit), never above STEEP's price and never under FRIEND's (the shop's
+   *  lowest: a customer who can't reach it names no price — round 20's review); 0 when they name none (that, or a curator and a
+   *  piece that is not a Legendary). Always under their limit: a match is a sale */
+  const matchK = (cu) => Math.min(0.98, Math.max(0.82, 0.9 + (((cu && cu.mood) || 1) - 1)));
+  const matchPrice = (cu, p) => { const w = willing(cu, p), m = Math.min(priceOf(p, 3), Math.floor(w * matchK(cu) + 1e-6)); return m >= priceOf(p, 0) ? m : 0; };   // (+1e-6: 150 x 0.82 is 123, not 122.999…; round 20's review: never under FRIEND's price — as before round 20, nothing sells for less, and a Legendary offered to a Kid isn't one tap from ¤27)
+  /** a sale at the customer's own price → as offer()'s answer, with ratio (the price over the tag: the stars read it) */
+  function offerMatch(cu, p) {
+    const price = matchPrice(cu, p), ok = price > 0, n = orderOf(cu).length, met = matches(cu, p);
+    return { ok, price, tip: ok ? Math.round(price * tipK()) : 0, met, n, perfect: n > 0 && met === n, ratio: price / Math.max(1, tagNow(p)), match: true };
+  }
   /** an offer at plaque k → { ok, price, tip, met, n, perfect } (no state change: the game applies it) */
   function offer(cu, p, k) {
     const price = priceOf(p, k), ok = price <= willing(cu, p), n = orderOf(cu).length, met = matches(cu, p);
@@ -9248,7 +9265,7 @@ const SHOP = (() => {
   return { LEG_ODDS, PITY, CR, PLAQUES, TRACKS, KINDS, HUES, HUE_WORD, MAX_LVL, COMM_LV, MIX_LV, MARKET_LV, SACHET, dropPrice, sachetPrice, TABLES, tableAt, topFin, potPrice, POTPACK, PP_FIN, ppFin, handCost, potPackBest, potPackHand, potPackPrice, rollPotPack, openPotPack, dropsHeld, AUTO_AT, HOURS, XP_RATE, ensure, setOpen, tick, catchUp, arrivals, commArrivals, lvl, up, tierOf, figTier,
     BOOSTS, caseLit, boostMax, rollBoost, boost, arrangeCase, payout, boostXP, arriveEvery, FRESH, isMixed, mixWords,
     AUCTION_MS, BIN_MS, listSlots, BIDDERS, rating, marketMean, newListing, bidNow, marketTick, starsOf, ship, BOOST_CAP, settlePending,
-    RATE_N, rate, rateK, OTHER_N, saleStars, awayStars, saleWords, WORDS, NOES_STARS, LETTER_STARS, TORN_STARS, halfStar,
+    RATE_N, rate, rateK, OTHER_N, MATCH, matchK, matchPrice, offerMatch, matchAdj, saleStars, awayStars, saleWords, WORDS, NOES_STARS, LETTER_STARS, TORN_STARS, halfStar,
     PACK, costAt, baseAt, packWorth, packPrice, ofRar, otherSets, rollPack, pileAdd, pileTake, nextT, pileOther, tierFor, seriesAt,
     unlockLevel, seriesOpen, tierAt, xpNeed, xpPaint, xpSell, addXP, unlocksAt, minutesFor, xpTier,
     arrivalEvery, queueCap, counterSlots, masterQ, masterK, brushK, lampK, tipK, purseK, packOdds, custOdds, commEvery, commSlots,
@@ -10209,7 +10226,7 @@ const PROTO = {};
   // ================================================================== buttons (laid out in draw, hit-tested in the next update)
   function btn(id, label, x, y, w, h, o = {}) {
     const on = o.on !== false && !o.dim, hov = on && IN.mouseActive() && !IN.touch && IN.over(x, y, w, h), sel = on && (o.sel || hov);
-    P.btns.push({ id, x, y, w, h, on: on || !!o.dim, dim: !!o.dim });   // dim: looks unavailable, but a tap still says why
+    P.btns.push({ id, x, y, w, h, on: on || !!o.dim, dim: !!o.dim, label });   // dim: looks unavailable, but a tap still says why (label: what it says — the tests read it)
     rrect(x, y, w, h, !on ? C.UI2 : o.primary ? (sel ? C.O4 : C.O3) : sel ? C.UI5 : C.UI3);
     rrectb(x, y, w, h, !on ? C.UI3 : sel ? C.Y6 : o.primary ? C.O5 : C.UI5);
     if (on && !sel) hline(x + 2, x + w - 3, y + 1, o.primary ? C.O5 : C.UI4);
@@ -11057,7 +11074,8 @@ const PROTO = {};
       let k = -1; if (b && b.startsWith('pl') && armed) k = +b.slice(2);
       for (let i = 0; i < 4; i++) if (IN.keyPressed('Digit' + (i + 1))) k = i;
       if (IN.pressed('confirm')) k = 1;   // Enter: FAIR
-      if (k >= 0) offerAt(k);
+      if (((b === 'match' && armed) || IN.keyPressed('Digit5')) && SHOP.matchPrice(cu, p) > 0) k = SHOP.MATCH;   // round 20: MATCH, the customer's own price (5: beside 1-4, the plaques; M is the kit's mute)
+      if (k !== -1) offerAt(k);
     } else if (p && !P.sellShelf && b === 'list' && armed) { if (listPiece('stock', P.sellSel)) P.sellSel = -1; }
     else if (p && !P.sellShelf && ((b === 'display' && armed) || IN.pressed('confirm'))) toCase(P.sellSel);
   }
@@ -11075,9 +11093,11 @@ const PROTO = {};
   }
   /** a customer goes: out of the queue at once (and saved), their goodbye played by P.react */
   function leaves(cu, o) { if (G.S.q[0] === cu) G.S.q.shift(); P.react = Object.assign({ t: 0, leave: true, cu }, o); G.save(); }
-  /** the offer at plaque k: they pay (the piece goes, the coins come, the counts move) or say no */
+  /** the offer at plaque k (or k = SHOP.MATCH: their own price, round 20 — always a sale): they pay (the piece goes, the coins
+   *  come, the counts move) or say no */
   function offerAt(k) {
-    const cu = custNow(), p = selPiece(), shelf = !!P.sellShelf, r = SHOP.offer(cu, p, k), f = FIGS[figIdx(p.fig)];
+    const cu = custNow(), p = selPiece(), shelf = !!P.sellShelf, r = k === SHOP.MATCH ? SHOP.offerMatch(cu, p) : SHOP.offer(cu, p, k), f = FIGS[figIdx(p.fig)];
+    if (k === SHOP.MATCH && !r.ok) return;   // (they want none of it: no price of theirs to match — the button isn't there)
     if (r.ok) {
       const paid = SHOP.payout(r.price + r.tip), bonus = paid - r.price - r.tip;   // (the display shelf's COINS boost on top)
       { const L = shelf ? G.S.kept : G.S.stock, i = L.indexOf(p); if (i >= 0) L.splice(i, 1); } G.addMoney(paid, 'sale');
@@ -11092,7 +11112,7 @@ const PROTO = {};
         { name: T(f.name), money: fmtMoney(r.price), tip: fmtMoney(r.tip), bonus: fmtMoney(bonus) }) + (shelf ? ' ' + (p.b ? TF('(off the display shelf: its +{pct} {boost} goes with it)', { pct: pctB(p.b.v), boost: boostName(p.b.k) }) : T('(off the display shelf)')) : ''));
       P.sellSel = -1;
       const stars = SHOP.saleStars(r, k, cu.tries); SHOP.rate('c', stars, cu.who, SHOP.saleWords(r, k, stars));   // (round 18: what the visit was worth to them — the shop's rating)
-      leaves(cu, { ok: true, perfect: r.perfect, stars, text: r.perfect ? T('PERFECT! JUST WHAT I WANTED') : r.met ? T('LOVELY, I\'LL TAKE IT') : T('ALRIGHT, I\'LL TAKE IT') });
+      leaves(cu, { ok: true, perfect: r.perfect, stars, text: r.perfect ? T('PERFECT! JUST WHAT I WANTED') : k === SHOP.MATCH ? T('DEAL! THANK YOU') : r.met ? T('LOVELY, I\'LL TAKE IT') : T('ALRIGHT, I\'LL TAKE IT') });
     } else {
       cu.tries = (cu.tries | 0) + 1;
       const text = cu.tries >= 2 ? T('I\'LL LOOK AROUND ANOTHER TIME') : cu.cr >= 4 && f.rar < 4 ? T('I ONLY COLLECT LEGENDARIES') : r.price > cu.purse ? T('MORE THAN I CAN SPEND…') : T('HMM… A BIT DEAR FOR ME');
@@ -11964,8 +11984,11 @@ const PROTO = {};
     if (p) { textO(all ? T('PERFECT MATCH!') : TF('{met} OF {total} MET', { met, total: order.length }), bx + 5, y, all ? C.G3 : met ? C.Y2 : C.R3, C.CRM1, FONT_S, 1, 0); y += 8; }
     textO(TF('PURSE {money}', { money: fmtShort(cu.purse) }), bx + 5, y, C.Y2, C.CRM1, FONT_S, 1, 0);
     if (offShelf) { y += 8; boostIcon(p.b.k, bx + 5, y - 1); textO(offShelf, bx + 14, y, C.UI2, C.CRM1, FONT_S, 1, 0); }
-    // round 16: the right-hand column — NOT TODAY (round 17: no PIN ORDER here any more — a commission's letter is pinned instead)
+    // round 16: the right-hand column — NOT TODAY (round 17: no PIN ORDER here any more — a commission's letter is pinned instead);
+    // round 20 (Alex: "at counter add a button in which i can match the price of the customer"): under it, with a piece chosen,
+    // MATCH and the customer's own price for it (SHOP.matchPrice: always a sale) — where PIN ORDER stood
     btn('away', T('NOT TODAY'), W - 68, by + 1, 64, 12);
+    { const mp = p ? SHOP.matchPrice(cu, p) : 0; if (mp > 0) { const ml = TF('MATCH {money}', { money: fmtMoney(mp) }), mw = Math.max(64, textW(ml, FONT_M) + 8); btn('match', ml, W - mw - 4, VT + 22, mw, 13); } }   // (round 20's review: lit on hover like the plaques — FAIR stays Enter's ringed default)
   }
   function drawSellUI(piecesOnly) {
     const list = sellList(), off = sellOff(), shown = sellN(), shelf = !!P.sellShelf, cu = P.react && P.react.leave ? P.react.cu : custNow(), N = slotsN(), by = COUNTER_FEET;
@@ -11994,7 +12017,7 @@ const PROTO = {};
       textO(G.S.open ? TF('NEXT ONE IN ~{sec} S', { sec: next }) : T('THE SIGN SAYS CLOSED'), 60, VT + 34, G.S.open ? C.CRM0 : C.R5, C.UI0, FONT_S, 1, 1);
     }
     // round 16: the right-hand column — NOT TODAY (drawCustomer), SHELF / COUNTER, the back room (or the shelf's pages)
-    if (cu && !P.react && G.S.kept.length) { const sl = shelf ? T('COUNTER') : TF('SHELF {count}', { count: G.S.kept.length }), sw = Math.max(52, textW(sl, FONT_M) + 10); btn('shelf', sl, W - sw - 4, VT + 41, sw, 13, { sel: shelf }); }   // (6 px clear of PIN ORDER and of BACK ROOM: a 36 pt tap each)
+    if (cu && !P.react && G.S.kept.length) { const sl = shelf ? T('COUNTER') : TF('SHELF {count}', { count: G.S.kept.length }), sw = Math.max(52, textW(sl, FONT_M) + 10); btn('shelf', sl, W - sw - 4, VT + 41, sw, 13, { sel: shelf }); }   // (6 px clear of MATCH — PIN ORDER's old place — and of BACK ROOM: a 36 pt tap each)
     const back = shelf ? 0 : Math.max(0, G.S.stock.length - N);   // the back room: how many wait there (tap: a piece swaps with the chosen one)
     if (back && !P.react) { const bl = TF('BACK ROOM {count}', { count: back }), bw = textW(bl, FONT_M) + 10; btn('back', bl, W - bw - 4, VT + 60, bw, 13); }
     if (shelf && !P.react && shelfPages() > 1) { const pg = shelfPages(); btn('sp<', '◀', W - 60, VT + 60, 16, 13); btn('sp>', '▶', W - 20, VT + 60, 16, 13); textO(`${(P.shelfPg | 0) + 1}/${pg}`, W - 32, VT + 63, C.CRM1, C.UI0, FONT_S, 1, 1); }
@@ -12895,7 +12918,7 @@ const PROTO = {};
     }
   }
   function drawPops() {
-    if (P.xpPop && P.xpPop.t < 1.8) { const k = P.xpPop.t, t = TF('+{xp} XP', { xp: P.xpPop.n }) + (P.xpPop.why ? ' · ' + P.xpPop.why : ''), w = textW(t, FONT_S) + 6, x = clamp((P.xpAt | 0) || 60, 2, W - w - 2), y = BAR + 3 + Math.round(k * 3);
+    if (P.xpPop && P.xpPop.t < 1.8) { const k = P.xpPop.t, t = TF('+{xp} XP', { xp: P.xpPop.n }) + (P.xpPop.why ? ' · ' + P.xpPop.why : ''), w = textW(t, FONT_S) + 6, xa = P.react && P.phase === 'sell' ? Math.max((P.xpAt | 0) || 60, 84 + textW(P.react.text, FONT_S)) : (P.xpAt | 0) || 60, x = clamp(xa, 2, W - w - 2), y = BAR + 3 + Math.round(k * 3);   // (round 20's review: right of the customer's answer while it is up — it hid DEAL!)
       remapRect(x - 2, y - 2, w, 9, DARK[4]); textO(t, x + 1, y, k < 1.4 || ((k * 12) | 0) % 2 ? C.B6 : C.B4, C.UI0, FONT_S, 1, 0); }
     for (const q of P.miss) {   // a miss: a small red cross where the tap landed
       if (q.t > 0.45 && ((q.t * 20) | 0) % 2) continue;
