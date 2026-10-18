@@ -4084,6 +4084,8 @@ const LAYOUT = {
 /* =============================================================================
    TOM'S TINY ARMIES — src/15_audio.js                       (W1 · audio: everything you hear)
    (HD lab: copied from ~/dev/toms-tiny-armies 51e0e9f; + the kit's VOLUME groups, ENGINE_API §10.2's recipe for this file)
+   (HD lab round 24: + 'lofi', DRYING TIME — the default room's lo-fi song, 3:29 before it repeats, with a FORM of sections and
+    its own kit, record crackle and tape: all opt-in per song, the other cues are untouched. See LOFI / SONGS.lofi.)
    Everything is synthesised live with the Web Audio API: no samples, no network, no libraries.
    Adapted from Jackalope Jackpot's procedural engine (~/dev/pixel-kit/reference/jackalope/15_audio.js):
    the same lookahead scheduler, sliced init-time DSP, mix graph, voice stealing and first-gesture unlock,
@@ -4447,6 +4449,42 @@ const LAYOUT = {
       for (let i = 0; i < x.length; i++) { let s = 0; for (let k = 0; k < 3; k++) { if (i === O[k]) e[k] = 1; s += e[k]; e[k] *= k === 2 ? kL : kS; } x[i] *= s; if ((i & SL) === SL) yield; }
       return yield* gFin(x, sr, 0.8);
     }],
+    // ROUND 24: the lo-fi kit (SONGS.lofi, the default room's song): a round boom-bap kick, a dusty snare, soft dark hats.
+    // Extras (priority 2.9: built right after the core kit, before the room IR; no cue waits for them)
+    lkick: [2.9, 24000, function* (sr, R) { // the lo-fi kick: a round thump falling 115 -> 56 Hz + its skin's overtone, warmed by a soft saturation (the harmonics carry it on a phone), a felt beater
+      const x = NB(0.6, sr), kF = decay(0.028, sr), kA = decay(0.15, sr), k2 = decay(0.05, sr), nA = 0.0025 * sr, g = 1 / Math.tanh(1.6); let p = 0, p2 = 0, fe = 1, e = 1, e2 = 1;
+      for (let i = 0; i < x.length; i++) {
+        const f = 56 + 59 * fe; p += 2 * Math.PI * f / sr; p2 += 2 * Math.PI * f * 1.62 / sr;
+        x[i] = Math.tanh(1.6 * (Math.sin(p) * e + 0.22 * Math.sin(p2) * e2) * Math.min(1, i / nA)) * g; fe *= kF; e *= kA; e2 *= k2;
+        if ((i & SL) === SL) yield;
+      }
+      const z = yield* gWhite(NB(0.6, sr), R); yield* gBiq(z, 'lp', 1400, 0.7, sr);
+      const kz = decay(0.005, sr); let ez = 0.22; for (let i = 0; i < x.length && ez > 1e-5; i++) { x[i] += z[i] * ez; ez *= kz; }
+      yield* gBiq(x, 'hp', 40, 0.7, sr);
+      return yield* gFin(x, sr, 0.9);
+    }],
+    lsnare: [2.9, 32000, function* (sr, R) { // the lo-fi snare: a tuned body (185 + 330 Hz) under a rattle that darkens as it dies, glued by a soft saturation, its crack rounded off
+      const x = NB(0.42, sr); yield* gWhite(x, R); yield* gBiq(x, 'bp', 1700, 0.55, sr); yield* gBiq(x, 'lp', 5000, 0.7, sr);
+      const kN = decay(0.06, sr), kT = decay(0.17, sr), kB = decay(0.045, sr), nA = 0.0012 * sr, w1 = 2 * Math.PI * 185 / sr, w2 = 2 * Math.PI * 330 / sr; let e = 1, eT = 1, eB = 1;
+      for (let i = 0; i < x.length; i++) {
+        x[i] = Math.tanh(1.5 * (x[i] * Math.min(1, i / nA) * (0.8 * e + 0.2 * eT) * 1.6 + (0.5 * Math.sin(w1 * i) + 0.22 * Math.sin(w2 * i)) * eB)); e *= kN; eT *= kT; eB *= kB;
+        if ((i & SL) === SL) yield;
+      }
+      yield* gBiq(x, 'lp', 3800, 0.6, sr);
+      return yield* gFin(x, sr, 0.85);
+    }],
+    lhat: [2.9, 32000, function* (sr, R) { // the lo-fi hat: a soft, dark closed hat (a tick of noise round 6 kHz, gone in 50 ms)
+      const x = NB(0.09, sr); yield* gWhite(x, R); yield* gBiq(x, 'hp', 3800, 0.7, sr); yield* gBiq(x, 'bp', 6200, 0.9, sr);
+      const k = decay(0.016, sr), nA = 0.0015 * sr; let e = 1;
+      for (let i = 0; i < x.length; i++) { x[i] *= Math.min(1, i / nA) * e; e *= k; }
+      return yield* gFin(x, sr, 0.6);
+    }],
+    lohat: [2.9, 32000, function* (sr, R) { // the lo-fi open hat (soft): the same noise, left to ring
+      const x = NB(0.45, sr); yield* gWhite(x, R); yield* gBiq(x, 'hp', 3800, 0.7, sr); yield* gBiq(x, 'bp', 6000, 0.8, sr);
+      const k = decay(0.1, sr), nA = 0.003 * sr; let e = 1;
+      for (let i = 0; i < x.length; i++) { x[i] *= Math.min(1, i / nA) * e; e *= k; if ((i & SL) === SL) yield; }
+      return yield* gFin(x, sr, 0.5);
+    }],
   };
   /** room impulse response: pre-delay, early reflections, darkening exponential tail (stereo-decorrelated) — a small,
    *  warm wooden room (the shop) rather than a hall */
@@ -4562,6 +4600,27 @@ const LAYOUT = {
           if ((i & SL) === SL) yield;
         }
         out.push(yield* gNorm(loopify(x, n), 0.75));
+      }
+      return { sr, ch: out };
+    },
+    // ROUND 24: the record under the lo-fi song (SONGS.lofi.bed): a faint hiss, dust ticking, a soft pop now and then, the ticks
+    // swelling once a turn (33 1/3: every 1.8 s). Music, not ambience: the song plays it on its own track. 18 s = ten turns, so
+    // the turn runs on across the loop; each channel its own dust. Not in BED_ORDER: built when the song first asks for it.
+    vinyl: function* (R) {
+      const sr = 22050, n = 18 * sr, N = n + Math.floor(0.5 * sr), out = [];
+      for (let ch = 0; ch < 2; ch++) {
+        const x = yield* gPink(new Float32Array(N), R); yield* gBiq(x, 'hp', 1200, 0.6, sr); yield* gBiq(x, 'lp', 6500, 0.6, sr);
+        for (let i = 0; i < N; i++) { x[i] *= 0.14; if ((i & SL) === SL) yield; }                    // the hiss
+        let nd = 0;
+        for (let t = R.r(0, 0.03); t < N / sr; t += -Math.log(1 - R.f() * 0.999) / 40) {               // the dust, thinned by the turn
+          const turn = 0.5 + 0.5 * Math.cos(2 * Math.PI * t / 1.8 + ch * 0.4);
+          if (R.f() > 0.35 + 0.45 * turn) continue;
+          addBurst(x, sr, Math.floor(t * sr), R.r(0.04, 0.16) * Math.pow(R.f(), 1.4), R.r(0.00015, 0.0006), R.r(3000, 7000), R);
+          if ((++nd & 31) === 0) yield;
+        }
+        for (let t = R.r(0.2, 1.2); t < N / sr; t += R.r(0.8, 3.4)) { addBurst(x, sr, Math.floor(t * sr), R.r(0.08, 0.2), R.r(0.0006, 0.0016), R.r(1500, 3200), R); yield; }   // a pop
+        yield* gBiq(x, 'hp', 400, 0.7, sr);
+        out.push(loopify(x, n)); yield;
       }
       return { sr, ch: out };
     },
@@ -5148,6 +5207,36 @@ const LAYOUT = {
     lead: 'A4:1.5 C5:.5 E5:2 | D5:1.5 Bb4:.5 A4:1 G4:1 | C5:1.5 E5:.5 D5:2 | D5:2 C5:1.5 r:.5 | G5:1.5 F5:.5 Eb5:1 D5:1 | D5:2 Db5:2 | C5:1.5 A4:.5 Eb5:1 C5:1 | Bb4:2 A4:1 r:1 | ' +
           'A4:1.5 C5:.5 E5:1.5 F5:.5 | G5:2 E5:1 D5:1 | C5:1 E5:1 F#5:1 Eb5:1 | F5:1.5 D5:.5 Db5:1 Bb4:1 | F5:1.5 D5:.5 F5:1 Db5:1 | C5:1.5 A4:.5 Eb5:1 C5:1 | Bb4:1 D5:1 G5:1 E5:1 | F5:3 r:1',
   };
+  /** ROUND 24: DRYING TIME — the default room's lo-fi song (Alex: "change the default music (only for level 0) into a 3-4min long
+   *  lo-fi bgm loop that fits the game"). F major, 78 BPM, a lazy swing; 68 bars = 3:29 before it repeats (the form, one letter
+   *  a bar: SONGS.lofi.secs). The A loop is IVmaj9 - iii9 - vi9 - ii9 V13 (it never quite lands home), the B loop the
+   *  "Just the two of us" turn (IVmaj9 - III7b9 - vi9 - ii9/IV V13/IV), the bridge drifts through Db, Bb minor and Ab before the
+   *  one real cadence (C7b9 -> Fmaj9) brings the drums back. */
+  const LOFI = {
+    loop: 'Bbmaj9 | Am9 | Dm9 | Gm9 C13 | Bbmaj9 | Am9 | Dm9 D7b9b13 | Gm9 C13 | ' +                 // A1 the groove
+          'Bbmaj9 | Am9 | Dm9 | Gm9 C13 | Bbmaj9 | Am9 | Dm9 D7b9b13 | Gm9 C13 | ' +                 // A2 the tune (wooden flute)
+          'Bbmaj9 | A7b9b13 | Dm9 | Cm9 F13 | Bbmaj9 | A7b9b13 | Dm9 | Cm9 F13 | ' +               // B1 the second tune (flugelhorn)
+          'Bbmaj9 | Am9 | Dm9 | Gm9 C13 | Bbmaj9 | Am9 | Dm9 D7b9b13 | Gm9 C13 | ' +                 // A3 the groove, ghost notes
+          'Dbmaj9 | Cm9 F13 | Bbmaj9 | Bbm9 Eb13 | Fmaj9 | Abmaj9 | Gm9 | C9sus C7b9 | ' +            // C  the bridge (music box, no drums)
+          'Fmaj9 | Dm9 | Gm9 | C9sus C13 | ' +                                                        // D  the drums come back
+          'Bbmaj9 | Am9 | Dm9 | Gm9 C13 | Bbmaj9 | Am9 | Dm9 D7b9b13 | Gm9 C13 | ' +                 // A4 the tune (flute + vibes)
+          'Bbmaj9 | A7b9b13 | Dm9 | Cm9 F13 | Bbmaj9 | A7b9b13 | Dm9 | Cm9 F13 | ' +               // B2 the second tune (flugel + vibes)
+          'Bbmaj9 | Am9 | Dm9 | Gm9 C13 | Bbmaj9 | Am9 | Gm9 | Gm9 C9sus',                            // T  the tag: the vibes' echo, thinning, the lead-in
+    lead: 'r:4 | r:4 | r:4 | r:4 | r:4 | r:4 | r:4 | r:4 | ' +
+          'r:1 C5:.5 D5:.5 F5:1.5 D5:.5 | C5:2 r:1 A4:.5:.6 C5:.5 | E5:1.5 D5:.5 C5:1 A4:1 | Bb4:1 A4:1 G4:1.5 r:.5 | ' +
+          'r:1 C5:.5 D5:.5 F5:1 A5:1:.8 | G5:1.5 E5:.5 C5:2 | D5:1 F5:.5 E5:.5 D5:1 C5:1 | A4:2 r:2 | ' +
+          'F5:1.5 D5:.5 C5:1 A4:1 | C#5:2 r:.5 E5:.5:.6 G5:.5:.65 Bb5:.5:.7 | A5:2 F5:1 E5:1 | Eb5:1.5 D5:.5 C5:1 A4:1 | ' +
+          'D5:1 F5:1 A5:1.5 G5:.5 | F5:1 E5:1 C#5:2 | D5:1.5 E5:.5 F5:1 A5:1 | G5:1.5 F5:.5 Eb5:2 | ' +
+          'r:4 | r:4 | r:4 | r:4 | r:4 | r:4 | r:4 | r:4 | ' +
+          'r:1 F6:1 Eb6:1 C6:1 | Bb5:2 r:1 A5:1 | r:1 D6:1 C6:1 A5:1 | Db6:2 r:1 C6:1 | r:1 E6:1 C6:1 G5:1 | C6:2 r:1 Bb5:1 | r:1 D6:1 Bb5:1 A5:1 | G5:2 E5:2 | ' +
+          'r:4 | r:4 | r:4 | r:4 | ' +
+          'r:1 C5:.5 D5:.5 F5:1.5 G5:.5 | E5:1 C5:1 r:1 A4:.5:.6 C5:.5 | E5:1.5 D5:.5 C5:1 A4:1 | Bb4:1 A4:1 G4:1 E4:1 | ' +
+          'r:1 C5:.5 D5:.5 F5:1 A5:1:.8 | G5:1.5 E5:.5 C5:1 E5:1 | D5:1 F5:.5 E5:.5 D5:1 C5:1 | A4:2 r:2 | ' +
+          'F5:1.5 D5:.5 C5:1 A4:1 | C#5:1.5 E5:.5 G5:1 Bb5:1 | A5:1.5 G5:.5 F5:1 E5:1 | Eb5:1.5 D5:.5 C5:1 A4:1 | ' +
+          'D5:1 F5:1 A5:1 C6:1:.8 | Bb5:1 G5:1 E5:1 C#5:1 | D5:2 F5:1 E5:1 | D5:1 C5:1 A4:2 | ' +
+          'r:1 C5:.5:.6 D5:.5:.65 F5:2 | E5:2 r:2 | r:1 C5:1:.6 A4:2:.55 | r:4 | r:4 | r:4 | r:4 | r:4',
+    form: 'aaaaaaaa bbbbbbbb cccccccc dddddddd eeeeeeee ffff gggggggg hhhhhhhh tttt uu jj',
+  };
   const SONGS = {
     title: {
       name: 'Rain Waltz', desc: 'F MAJOR 3/4 84  MUSIC BOX + PIANO', bpm: 84, beats: 3, swing: 0.5, lay: 0.006,
@@ -5392,8 +5481,36 @@ const LAYOUT = {
       mix: { bass: [0.62, -0.05, 0.2], comp: [0.4, -0.2, 0.4], lead: [0.8, 0.16, 0.44], lead2: [0.52, -0.1, 0.46] },
       gain: 1.12,
     },
+    // ---- ROUND 24: the default room's music ('paint' stays defined, unused by the room): DRYING TIME, a lo-fi tune (LOFI above).
+    // The FORM picks each bar's SECTION (secs): what the lead plays and on which channel, the drums' / bass's / Rhodes' variants
+    // (dr bs cp) and touch (bv cv). Its own kit (lkick lsnare lhat lohat), its own record (BEDS.vinyl: bed) and its own tape (a low
+    // cut, a warm low-pass and a slow wow on the track: tape) — all opt-in, so every other song sounds exactly as before.
+    lofi: {
+      name: 'Drying Time', desc: 'F MAJOR 78 LO-FI  RHODES + DUSTY KIT', bpm: 78, swing: 0.57, lay: 0.02,
+      intro: 'Gm9 | C9sus | Gm9 | C9sus C13', introForm: 'iijj', loop: LOFI.loop, lead: LOFI.lead, form: LOFI.form,
+      secs: {
+        i: { bass: 0, dr: 'none', cp: 'pad', cv: 0.42 },                                   // the intro: the Rhodes and the record alone
+        j: { lead: 'T', dr: 'in', bs: 'long', bv: 0.85, cp: 'hold', cv: 0.44 },             // the lead-in: hats + bass, a pickup (also the tag's end)
+        a: { lead: 'T', dr: 'full', bs: 'groove', cp: 'push' },                             // A1 the groove
+        b: { lead: 'H', dr: 'full', bs: 'groove', cp: 'hold' },                             // A2 the tune on the wooden flute
+        c: { lead: 'H', ch: 'lead3', dr: 'full', bs: 'groove', cp: 'push' },                // B1 the second tune on the flugelhorn
+        d: { lead: 'T', dr: 'ghost', bs: 'busy', cp: 'dot' },                               // A3 the groove again, ghost notes, a busier Rhodes
+        e: { lead: 'H', ch: 'lead4', dr: 'brk', bs: 'long', bv: 0.8, cp: 'pad', cv: 0.44 },   // C  the bridge: the music box over long rolled chords, no kick or snare
+        f: { lead: 'T', dr: 'build', bs: 'groove', cp: 'hold' },                            // D  the drums come back
+        g: { lead: 'B', ch2: 'lead2', oct2: 0, dr: 'full', bs: 'groove', cp: 'push' },      // A4 the tune, the vibes with the flute
+        h: { lead: 'B', ch: 'lead3', ch2: 'lead2', oct2: 0, dr: 'ghost', bs: 'busy', cp: 'push' },  // B2 the second tune, the vibes with the flugel
+        t: { lead: 'H', ch: 'lead2', dr: 'light', bs: 'groove', cp: 'hold' },               // T  the tag: the vibes' echo of the tune, a rim for the snare
+        u: { lead: 'T', dr: 'thin', bs: 'long', cp: 'hold' },                               //    thinning: hats and a rim
+      },
+      inst: { lead: 'whistle', lead2: 'vibes', lead3: 'flugel', lead4: 'musicbox', comp: 'rhodes', bass: 'upright' },
+      bass: 'lofi', comp: 'lofi', drums: 'lofi', compLo: 57, compHi: 76,
+      mix: { bass: [0.5, 0, 0.06], comp: [0.55, -0.12, 0.3], drums: [0.6, 0.05, 0.1], lead: [0.8, 0.12, 0.35], lead2: [0.62, 0.18, 0.4], lead3: [0.4, -0.08, 0.32], lead4: [0.65, 0.2, 0.45] },
+      trem: 0.2, gain: 0.92,
+      tape: { hp: 45, lp: 4800, q: 0.5, base: 0.006, wow: [[0.42, 0.0011], [0.13, 0.002], [5.5, 0.00002]] },
+      bed: ['vinyl', 0.3],
+    },
   };
-  const MUSIC_IDS = ['title', 'shop', 'shop_evening', 'lane', 'square', 'back', 'paint', 'tray', 'auction', 'contest', 'storm', 'lantern', 'ending', 'room_kd', 'room_pc', 'room_og', 'room_hh', 'room_pi', 'room_un', 'room_el', 'room_dw', 'room_wi'];   // (M5: the room themes' own music)
+  const MUSIC_IDS = ['title', 'shop', 'shop_evening', 'lane', 'square', 'back', 'paint', 'lofi', 'tray', 'auction', 'contest', 'storm', 'lantern', 'ending', 'room_kd', 'room_pc', 'room_og', 'room_hh', 'room_pi', 'room_un', 'room_el', 'room_dw', 'room_wi'];   // (M5: the room themes' own music; ROUND 24: 'lofi', the default room's)
   const PREP_ERRORS = [];
   /** parse charts + melodies once at load (a bad chart disables only that cue and is reported) */
   function parseBar(S, s, li) {
@@ -5418,6 +5535,25 @@ const LAYOUT = {
       return out;
     });
   }
+  /** ROUND 24 (opt-in): a song's FORM — one section letter a bar ('|' and spaces ignored), S.form for the loop, S.introForm for
+   *  the intro — names each bar's section in S.secs: { lead: a pass letter (H V B T ...), ch / ch2: the lead's channels (S.inst
+   *  keys), oct / oct2, bass: 0 / comp: 0 / drums: 0 = that part rests, pad: 1 = the pad plays, and the styles' own keys }.
+   *  -> S.formB / S.formI = { sec[], k[] (the bar's index in its section), n[] (the section's length) } */
+  function prepForm(S, id) {
+    const clean = s => (s || '').replace(/[\s|]/g, ''), fl = clean(S.form), fi = clean(S.introForm);
+    if (fl.length !== S.loopB.length || fi.length !== S.introB.length) throw new Error(id + ': the form has ' + fl.length + ' + ' + fi.length + ' bars, the chart ' + S.loopB.length + ' + ' + S.introB.length);
+    for (const x in S.secs) for (const key of ['ch', 'ch2']) if (S.secs[x][key] && !S.inst[S.secs[x][key]]) throw new Error(id + ': section "' + x + '" plays on "' + S.secs[x][key] + '", not in its inst');
+    const mk = s => {
+      const o = { sec: [], k: [], n: [] };
+      for (let i = 0; i < s.length; i++) {
+        const sec = S.secs[s[i]]; if (!sec) throw new Error(id + ': no section "' + s[i] + '"');
+        let a = i, b = i; while (a > 0 && s[a - 1] === s[i]) a--; while (b + 1 < s.length && s[b + 1] === s[i]) b++;
+        o.sec.push(sec); o.k.push(i - a); o.n.push(b - a + 1);
+      }
+      return o;
+    };
+    S.formB = mk(fl); S.formI = mk(fi);
+  }
   for (const id of MUSIC_IDS) {
     const S = SONGS[id];
     try {
@@ -5433,6 +5569,7 @@ const LAYOUT = {
       if (S.introLeadB && S.introLeadB.length !== S.introB.length) throw new Error(id + ': intro lead has ' + S.introLeadB.length + ' bars, intro has ' + S.introB.length);
       if (/[SA]/.test(S.passes) && !S.inst[S.soloInst || 'lead']) throw new Error(id + ': passes need soloInst');
       for (const k in S.inst) if (!INST[S.inst[k]]) throw new Error(id + ': unknown instrument "' + S.inst[k] + '"');
+      if (S.form) prepForm(S, id);
       S.ok = true;
     } catch (e) { S.ok = false; PREP_ERRORS.push(id + ': ' + e.message); warn('music "' + id + '" disabled: ' + e.message); }
   }
@@ -5472,14 +5609,16 @@ const LAYOUT = {
     const S = tr.song; tr.ev.length = 0; tr.np = 0;
     const f = formAt(S, tr.bar, tr.fi), nx = formAt(S, tr.bar + 1, tr.fn);
     const bar = f.bar, pass = f.pass, li = f.li, next = nx.bar.ch[0];
-    const P = pass < 0 ? 'I' : S.passes[pass % S.passes.length];
+    const fm = S.formB ? (pass < 0 ? S.formI : S.formB) : null, si = pass < 0 ? f.ii : li, sc = fm ? fm.sec[si] : null;   // ROUND 24: the bar's section (S.form)
+    tr.sec = sc; tr.secK = sc ? fm.k[si] : 0; tr.secN = sc ? fm.n[si] : 0;
+    const P = sc && sc.lead ? sc.lead : pass < 0 ? 'I' : S.passes[pass % S.passes.length];
     tr.stat[0] = tr.stat[1]; tr.statT[0] = tr.statT[1]; tr.stat[1] = bar; tr.statT[1] = tr.barT;
     for (let i = 0; i < 16; i++) tr.mel[i] = 0;
     leadPart(tr, S, bar, P, li, f.ii);
-    BASS[S.bass](tr, S, bar, next, pass);
-    if (S.comp) COMP[S.comp](tr, S, bar, next, pass);
-    if (S.drums) DRUMS[S.drums](tr, S, bar, pass, li);
-    if (S.pad) padPart(tr, S, bar);
+    if (!sc || sc.bass !== 0) BASS[S.bass](tr, S, bar, next, pass);
+    if (S.comp && (!sc || sc.comp !== 0)) COMP[S.comp](tr, S, bar, next, pass);
+    if (S.drums && (!sc || sc.drums !== 0)) DRUMS[S.drums](tr, S, bar, pass, li);
+    if (S.pad && (!sc || sc.pad)) padPart(tr, S, bar);
     if (S.extra) S.extra(tr, bar, li, pass);
     tr.ev.sort(byT);
     tr.bar++; tr.barT += S.beats * tr.spb;
@@ -5571,6 +5710,25 @@ const LAYOUT = {
       const tgt = placeNear(next.bass, r, 33, 50);   // where the next bar's root will land
       if (R.f() < 0.3 && tgt !== r) eNote(tr, 'bass', inst, 'bass', 3.5, tgt > 33 ? tgt - 1 : tgt + 1, 0.4, 0.55, 0, c.sym);
     },
+    /** ROUND 24: the lo-fi bass (SONGS.lofi): a round root on one, a second note with the kick on the and of three, a soft approach
+     *  into the next chord; 'busy' adds the fifth on the and of two, 'long' holds (the bridge, the lead-ins); two chords: one
+     *  each. The bar's section picks it (tr.sec.bs) and its touch (bv). It sits C2-D3 (65-147 Hz), where a phone still hears it. */
+    lofi(tr, S, bar, next) {
+      const inst = S.inst.bass, R = tr.rng, sc = tr.sec || {}, v = sc.bs || 'groove', k = sc.bv || 1, lo = 36, hi = 50, two = bar.ch.length > 1;
+      if (v === 'long') {
+        for (let s = 0; s < bar.ch.length; s++) { const c = bar.ch[s], m = placeNear(c.bass, tr.bassPrev, lo, hi); eNote(tr, 'bass', inst, 'bass', s ? c.beat : 0, m, (two ? (s ? S.beats - c.beat : bar.ch[1].beat) : S.beats) - 0.15, 0.62 * k, 0, c.sym); tr.bassPrev = m; tr.lastBassC = c; }
+        return;
+      }
+      const c0 = bar.ch[0], r0 = placeNear(c0.bass, tr.bassPrev, lo, hi), b13 = c0.voice.indexOf((c0.root + 8) % 12) >= 0;   // a voiced b13 (A7b9b13): its natural fifth would rub the Rhodes' b13 a half step / a minor 9th under it
+      eNote(tr, 'bass', inst, 'bass', 0, r0, two ? 1.4 : 1.9, 0.74 * k, 0, c0.sym);
+      if (v === 'busy' && (!two || R.f() < 0.5)) eNote(tr, 'bass', inst, 'bass', 1.5, placeNear(c0.tones[b13 ? 3 : 2], r0 + 4, lo, hi + 3), 0.4, 0.5 * k, 0, c0.sym);   // (under a b13: the b7)
+      let last = r0, lastC = c0;
+      if (two) { const c1 = bar.ch[1]; last = placeNear(c1.bass, r0, lo, hi); lastC = c1; eNote(tr, 'bass', inst, 'bass', c1.beat, last, 1.3, 0.7 * k, 0, c1.sym); }
+      else { last = R.f() < 0.6 || b13 ? r0 : placeNear(c0.tones[2], r0 + 5, lo, hi + 3); eNote(tr, 'bass', inst, 'bass', 2.5, last, 0.85, 0.6 * k, 0, c0.sym); }   // with the kick: the root again, or its fifth (under a b13: the root; the draw stays)
+      const tgt = placeNear(next.bass, last, lo, hi);   // into the next bar: a soft approach (chromatic, a scale step or the target's fifth)
+      if (tgt !== last && R.f() < 0.75) eNote(tr, 'bass', inst, 'bass', 3.5, approach(tgt, tgt > last ? 1 : -1, lastC, R), 0.42, 0.5 * k, 0, lastC.sym);
+      tr.bassPrev = last; tr.lastBassC = lastC;
+    },
   };
   // ---------------------------------------------------------------- comping
   /** comp rhythm cells: [beat, durBeats, anticipate-next-chord] */
@@ -5583,6 +5741,14 @@ const LAYOUT = {
     swing: { one: ['charleston', 'push', 'red', 'twofour', 'charleston'], two: ['halves', 'ant2', 'split2'] },
     cool: { one: ['long', 'red', 'off', 'long'], two: ['halves', 'off2', 'ant2'] },
     soft: { one: ['long'], two: ['halves'] },
+  };
+  /** ROUND 24: the lo-fi Rhodes' cells (COMP.lofi; a section's cp): [beat, durBeats, anticipate] lists for bars of one / two chords.
+   *  Legato, as on a sustain pedal: a chord rings until the next one is struck (a push's length is the tie, set by COMP.lofi) */
+  const LOFI_CP = {
+    hold: { one: [[[0, 3.7, 0]], [[0, 3.45, 0], [3.5, 0.9, 1]]], two: [[[0, 1.95, 0], [2, 1.85, 0]]] },
+    push: { one: [[[0, 3.45, 0], [3.5, 0.9, 1]], [[0, 2.45, 0], [2.5, 0.95, 0], [3.5, 0.9, 1]], [[0, 3.7, 0]]], two: [[[0, 1.95, 0], [2, 1.85, 0]], [[0, 1.45, 0], [1.5, 2.3, 1]]] },
+    dot: { one: [[[0, 1.45, 0], [1.5, 0.95, 0], [2.5, 1.3, 0]], [[0, 1.45, 0], [1.5, 1.95, 0], [3.5, 0.9, 1]], [[0, 2.45, 0], [2.5, 0.95, 0], [3.5, 0.9, 1]]], two: [[[0, 1.45, 0], [1.5, 0.45, 0], [2, 1.85, 0]], [[0, 1.45, 0], [1.5, 2.3, 1]]] },
+    pad: { one: [[[0, 3.9, 0]]], two: [[[0, 1.95, 0], [2, 1.95, 0]]] },
   };
   /** 12-bit pitch-class mask of the melody sounding in eighths [q0, q1) of this bar */
   function melMask(tr, b0, b1) { const nq = tr.nq; let m = 0; for (let q = Math.max(0, Math.floor(b0 * 2)); q < Math.min(nq, Math.ceil(b1 * 2)); q++) if (tr.mel[q]) m |= 1 << (tr.mel[q] % 12); return m; }
@@ -5614,6 +5780,55 @@ const LAYOUT = {
     const c = chAt(bar, beat);
     if (c !== tr.vC) { tr.vC = c; tr.prevV = pickVoicing(c, tr.prevV, S.compLo, S.compHi, spread, melAt(tr, beat), melMask(tr, beat, beat + len)); }
     return tr.prevV;
+  }
+  /** ROUND 24: the tune a lo-fi chord sounds under: this bar's (tr.mel) from `beat` for `len` beats and, for a chord tied over
+   *  the bar line, the next bar's WRITTEN tune (S.leadB, if its section plays one) until the tie ends -> { mask, low } */
+  function lofiTune(tr, S, beat, len) {
+    let mask = melMask(tr, beat, Math.min(S.beats, beat + len)), low = 0;
+    for (let q = Math.max(0, Math.floor(beat * 2)); q < Math.min(tr.nq, Math.ceil((beat + len) * 2)); q++) if (tr.mel[q] && (!low || tr.mel[q] < low)) low = tr.mel[q];
+    const over = beat + len - S.beats, li = tr.fn.li, sc = over > 0 && li >= 0 && S.formB ? S.formB.sec[li] : null;
+    if (sc && sc.lead && sc.lead !== 'T' && S.leadB) for (const n of S.leadB[li]) if (n[0] < over) { const m = n[1] + (sc.oct || 0); mask |= 1 << (m % 12); if (!low || m < low) low = m; }
+    return { mask, low };
+  }
+  /** ROUND 24: the arrangers' low interval limits: the lowest note (MIDI) an interval of k semitones sounds clear at (m2 E3, M2 Eb3,
+   *  m3 C3, M3 Bb2, P4 A2, TT B2, P5 Bb1, m6 .. M7 F2, m9 E2, M9 Eb2; 0 = none) */
+  const LOW_LIM = [0, 52, 51, 48, 46, 45, 47, 34, 41, 41, 41, 41, 0, 40, 39];
+  /** ROUND 24: what a lo-fi chord struck on `beat` for `len` beats sounds with, as [midi, seconds together] on the planner's own
+   *  clock (the swing, the lead's lay, the Rhodes' 16 ms and its roll): the tune (this bar's lead and, for a chord tied over the
+   *  bar line, the next bar's written tune) and the bass (this bar's and, for a tie, the next bar's first note: BASS.lofi starts
+   *  every bar on placeNear(its chord's bass, tr.bassPrev, 36, 50)) -> { tune, bass } */
+  function lofiWith(tr, S, beat, len) {
+    const spb = tr.spb, a = tAt(tr, beat) + 0.016, b = a + len * spb + 0.04, bl = tr.barT + S.beats * spb, tune = [], bass = [];
+    const add = (o, m, t0, t1) => { const d = Math.min(b, t1) - Math.max(a, t0); if (d > 0) o.push([m, d]); };
+    for (let i = 0; i < tr.ev.length; i++) { const e = tr.ev[i]; if (e.k === EV_NOTE && (e.part === 'lead' || e.part === 'bass')) add(e.part === 'lead' ? tune : bass, e.m, e.t, e.t + e.d); }
+    const li = tr.fn.li, sc = b > bl && li >= 0 && S.formB ? S.formB.sec[li] : null;
+    if (sc && sc.lead && sc.lead !== 'T' && S.leadB) for (const n of S.leadB[li]) { const t = bl + swingPos(n[0], S.swing) * spb + S.lay; add(tune, n[1] + (sc.oct || 0), t, t + n[2] * 0.94 * spb); }
+    if (sc && sc.bass !== 0) add(bass, placeNear(tr.fn.bar.ch[0].bass, tr.bassPrev, 36, 50), bl, bl + 1.4 * spb);
+    return { tune, bass };
+  }
+  /** ROUND 24: the lo-fi Rhodes' voicing rule. No note sits under the low interval limit against a bass note (sounding together a
+   *  quarter beat or more), nor a half step or a minor 9th from a tune note it is held or tied under (half a beat or more
+   *  together). Such a note is RE-VOICED: up an octave, else to its substitute (SUBST: 9 -> root, maj7 -> 6, 13 -> 5, b9 -> root,
+   *  b13 -> 5), else down an octave; first to a place that rubs no tune note at all (0.15 s or more), else to one that only passes
+   *  a rub (under half a beat); always under `hi` (the tune), clear of the bass, on no note the voicing or the bass already has.
+   *  Only a note with no such place is left out (two notes stay at least). Pitches only: the times and the random draws stay. */
+  function lofiClear(tr, S, c, v, beat, len, hi) {
+    const W = lofiWith(tr, S, beat, len), q = 0.25 * tr.spb, half = 0.5 * tr.spb, lo = S.compLo - 7;
+    const low = (m) => W.bass.some(([b, d]) => { const iv = Math.abs(m - b), lim = iv < LOW_LIM.length ? LOW_LIM[iv] : 0; return d >= q && lim > 0 && Math.min(m, b) < lim; });
+    const bass = (m) => W.bass.some(([b, d]) => d >= q && b === m);
+    const rub = (m, th) => W.tune.some(([t, d]) => d >= th && (Math.abs(t - m) === 1 || Math.abs(t - m) === 13));
+    let out = v;
+    for (let k = 0; k < out.length; k++) {
+      const r = out[k]; if (!low(r) && !rub(r, half)) continue;
+      const cand = [r + 12], sub = SUBST[(r - c.root + 120) % 12];
+      if (sub !== undefined) { const up = r + ((c.root + sub - r) % 12 + 12) % 12; cand.push(up, up - 12); }
+      cand.push(r - 12);
+      let m = 0;
+      for (const th of [0.15, half]) { for (const x of cand) if (x >= lo && x <= hi && out.indexOf(x) < 0 && !low(x) && !bass(x) && !rub(x, th)) { m = x; break; } if (m) break; }
+      if (m) { out = out.slice(); out[k] = m; out.sort((x, y) => x - y); } else if (out.length > 2) { out = out.slice(); out.splice(k, 1); } else continue;
+      k = -1;
+    }
+    return out;
   }
   const COMP = {
     swing(tr, S, bar, next) { compCells(tr, S, bar, next, CSET.swing); },
@@ -5669,6 +5884,27 @@ const LAYOUT = {
       for (let s = 0; s < bar.ch.length; s++) {
         const c = bar.ch[s], beat = s ? c.beat : 0, len = bar.ch.length > 1 ? (s ? S.beats - c.beat : bar.ch[1].beat) : S.beats, v = voiceAt(tr, S, bar, beat, true, len);
         for (let k = 0; k < v.length; k++) eNote(tr, 'comp', S.inst.comp, 'comp', beat, v[k], len * 0.97, 0.32, k * 0.008, c.sym);
+      }
+    },
+    /** ROUND 24: the lo-fi Rhodes (SONGS.lofi): spread (drop-2) voicings, laid back 16 ms and rolled a little, held long, re-struck,
+     *  or pushed onto the and of four and tied over the bar line (the next bar then skips its one). The bar's section picks the
+     *  cells (tr.sec.cp: LOFI_CP) and the touch (cv); a section's last bar never pushes into the next section. Each voicing stays
+     *  under the tune it sounds with (lofiTune) and keeps the voicing rule (lofiClear: clear of the bass and of the tune). */
+    lofi(tr, S, bar, next) {
+      const R = tr.rng, sc = tr.sec || {}, two = bar.ch.length > 1, cells = LOFI_CP[sc.cp || 'hold'], set = two ? cells.two : cells.one, pat = set[R.i(set.length)];
+      const skip0 = tr.ant, antOK = tr.secK < tr.secN - 1, vel0 = sc.cv || 0.5, roll = sc.cp === 'pad' ? 0.034 : 0.013, nb = tr.fn.bar;
+      tr.ant = false;
+      if (tr.secK === 0) tr.prevV = null;   // each section starts from the middle of the register (voice-leading alone would drift)
+      for (let h = 0; h < pat.length; h++) {
+        const beat = pat[h][0], push = pat[h][2] && beat >= 3, ant = pat[h][2] && (push ? antOK : two);
+        if (skip0 && beat === 0) continue;
+        const c = ant ? (push ? next : bar.ch[1]) : chAt(bar, beat);
+        const len = push ? (ant ? S.beats - beat + (nb.ch.length > 1 ? nb.ch[1].beat - 0.1 : S.beats - 0.6) : 0.45) : pat[h][1];   // tied over the bar line / a short re-strike
+        if (ant && push) tr.ant = true;
+        const tune = lofiTune(tr, S, beat, len), hi = tune.low ? Math.max(S.compLo + 5, Math.min(S.compHi, tune.low - 1)) : S.compHi, v0 = pickVoicing(c, tr.prevV, S.compLo, hi, true, tune.low || melAt(tr, beat), tune.mask), v = lofiClear(tr, S, c, v0, beat, len, hi); tr.prevV = v;
+        const vel = vel0 * (0.9 + R.f() * 0.2) * (beat ? 0.88 : 1);
+        for (let k = 0; k < v.length; k++) eNote(tr, 'comp', S.inst.comp, 'comp', beat, v[k], len, vel * (k === v.length - 1 ? 1.08 : 1), 0.016 + k * roll + (R.f() - 0.5) * 0.006, c.sym);
+        for (let k = v.length; k < v0.length; k++) R.f();   // a left-out note still takes its draw (the random stream stays as it was)
       }
     },
   };
@@ -5727,7 +5963,49 @@ const LAYOUT = {
       if ((li & 1) === 0) eDrum(tr, 'tri', 0, 0.2, 'drR');
       if ((li & 3) === 3) eDrum(tr, 'roll', 4 - 1.25 / tr.spb, 0.34, 'dr', true);
     },
+    /** ROUND 24: the lo-fi kit (SONGS.lofi): boom-bap under the song's lazy swing — the kick on one and the and of three (pushes
+     *  now and then), a dusty snare on two and four 14 ms behind the beat, soft dark hats in eighths with sixteenth pickups, ghost
+     *  notes, a small fill (an open hat, two snare ghosts) closing each section. The bar's section picks it (tr.sec.dr): full,
+     *  ghost (busier), light (a rim for the snare, one kick), thin (hats + rim), in (hats, then a pickup), build (the drums coming
+     *  back over four bars), brk (the bridge: a shaker and a rim) or none. */
+    lofi(tr, S, bar, pass, li) {
+      const R = tr.rng, v = (tr.sec && tr.sec.dr) || 'full', k = tr.secK, last = k === tr.secN - 1, back = 0.014 / tr.spb;
+      const hat = (b, vel) => eDrum(tr, 'lhat', b, vel * (0.85 + R.f() * 0.3), 'drR');
+      if (v === 'none') return;
+      if (v === 'brk') { for (let b = 0.5; b < 4; b += 1) eDrum(tr, 'shaker', b, 0.14 + R.f() * 0.06, 'drR'); if (k & 1) eDrum(tr, 'rim', 3 + back, 0.2, 'drL'); return; }
+      if (v === 'in' || v === 'thin') {
+        for (let b = 0; b < 4; b += 0.5) hat(b, b % 1 ? 0.15 : 0.21);
+        if (v === 'thin') { eDrum(tr, 'rim', 1 + back, 0.22, 'drL'); eDrum(tr, 'rim', 3 + back, 0.24, 'drL'); }
+        else if (last) { eDrum(tr, 'lkick', 3.5, 0.42); eDrum(tr, 'lsnare', 3.75 + back, 0.2); }
+        return;
+      }
+      if (v === 'build') {
+        eDrum(tr, 'lkick', 0, 0.7); if (k >= 1) eDrum(tr, 'lkick', 2.5, 0.52);
+        const step = k === 0 ? 1 : k === 3 ? 0.25 : 0.5;
+        for (let b = 0; b < 4; b += step) hat(b, (0.15 + 0.05 * k) * (b % 1 ? 0.75 : 1));
+        if (k >= 2) { eDrum(tr, 'lsnare', 1 + back, 0.48); eDrum(tr, 'lsnare', 3 + back, 0.54); }
+        if (last) { eDrum(tr, 'lsnare', 3.5 + back, 0.26); eDrum(tr, 'lsnare', 3.75 + back, 0.34); }
+        return;
+      }
+      const fill = last && v !== 'light';   // full / ghost / light: eighth hats (the off-beats lighter), sixteenth pickups now and then
+      for (let b = 0; b < 4; b += 0.5) if (!(fill && b === 3.5)) hat(b, b % 1 ? 0.24 : 0.34);
+      if (v === 'ghost') { for (const b of LOFI_GH) if (R.f() < 0.55) hat(b, 0.13); }
+      else if (R.f() < 0.35) hat(R.f() < 0.5 ? 1.75 : 3.75, 0.13);
+      if (fill) eDrum(tr, 'lohat', 3.5, 0.24, 'drR');
+      const kp = v === 'light' ? LOFI_KP[4] : (k & 3) === 3 ? LOFI_KP[2] : LOFI_KP[R.f() < 0.6 ? 0 : R.f() < 0.5 ? 1 : 3];
+      for (const b of kp) eDrum(tr, 'lkick', b, b === 0 ? 0.62 : 0.45);
+      const sn = v === 'light' ? 'rim' : 'lsnare', sv = v === 'light' ? 0.3 : 0.62;   // two and four, laid back; ghost notes before them
+      eDrum(tr, sn, 1 + back, sv); eDrum(tr, sn, 3 + back, sv * 1.05);
+      if (v === 'light') return;
+      const gh = v === 'ghost' ? 0.6 : 0.3;
+      if (R.f() < gh) eDrum(tr, 'lsnare', 0.75 + back, 0.12);
+      if (R.f() < gh) eDrum(tr, 'lsnare', 2.75 + back, 0.12);
+      if (fill) { eDrum(tr, 'lsnare', 3.5 + back, 0.18); eDrum(tr, 'lsnare', 3.75 + back, 0.26); }
+    },
   };
+  /** ROUND 24: DRUMS.lofi's kick patterns (one and the and of three; a double; the push on the and of two that ends each four bars;
+   *  one on the a of one; 'light': one alone) and its sixteenth hat pickups */
+  const LOFI_KP = [[0, 2.5], [0, 2.5, 2.75], [0, 1.75, 2.5], [0, 0.75, 2.5], [0]], LOFI_GH = [0.75, 1.75, 2.75, 3.75];
   // ---------------------------------------------------------------- melody (written heads, improvised choruses, arpeggio variations)
   function markMel(tr, beat, len, m) { for (let q = Math.floor(beat * 2); q < Math.min(tr.nq, Math.ceil((beat + len) * 2)); q++) tr.mel[q] = m; }
   function leadPart(tr, S, bar, P, li, ii) {
@@ -5741,11 +6019,12 @@ const LAYOUT = {
     if (P === 'S') { improvBar(tr, S, bar); return; }
     if (P === 'A') { arpBar(tr, S, bar, li); return; }
     const notes = S.leadB && S.leadB[li]; if (!notes) return;
-    const alt = P === 'V', inst = alt ? S.inst.lead2 : S.inst.lead, ch = alt ? 'lead2' : 'lead', oct = alt ? (S.lead2Oct || 0) : 0, R = tr.rng;
+    const sec = tr.sec, alt = P === 'V', ch = sec && sec.ch ? sec.ch : alt ? 'lead2' : 'lead', inst = S.inst[ch], oct = alt ? (S.lead2Oct || 0) : (sec && sec.oct) || 0, R = tr.rng;
+    const ch2 = sec && sec.ch2 ? sec.ch2 : 'lead2', oct2 = sec && sec.oct2 !== undefined ? sec.oct2 : (S.lead2Oct || 0);   // (ROUND 24: a section may name the channels)
     for (let i = 0; i < notes.length; i++) {
       const n = notes[i], c = chAt(bar, n[0]);
       eNote(tr, 'lead', inst, ch, n[0], n[1] + oct, n[2] * 0.94, n[3], S.lay + (R.f() - 0.5) * 0.012, c.sym).fl = n[4];
-      if (P === 'B' && S.inst.lead2) eNote(tr, 'lead', S.inst.lead2, 'lead2', n[0], n[1] + (S.lead2Oct || 0), n[2] * 0.94, n[3] * 0.7, S.lay, c.sym);
+      if (P === 'B' && S.inst[ch2]) eNote(tr, 'lead', S.inst[ch2], ch2, n[0], n[1] + oct2, n[2] * 0.94, n[3] * 0.7, S.lay, c.sym);
       markMel(tr, n[0], n[2], n[1] + oct);
     }
   }
@@ -6169,7 +6448,7 @@ const LAYOUT = {
         prevV: null, prevP: null, prevA: null, vC: null, bassPrev: 40, lastBassC: null, lastFifth: undefined, ant: false, imp: { p: 0, dir: 1, pb: 1 }, mel: new Float64Array(16), tmp4: [0, 0, 0, 0],
         fi: { bar: null, pass: 0, li: 0, ii: -1 }, fn: { bar: null, pass: 0, li: 0, ii: -1 }, stat: [null, null], statT: [0, 0],
       };
-      tr.out.connect(tr.fo); tr.send.connect(tr.sfo);
+      if (S.tape) tapeChain(tr, S.tape, t); else { tr.out.connect(tr.fo); tr.send.connect(tr.sfo); }   // (ROUND 24: a song's own tape)
       const g = S.gain || 1;
       tr.out.gain.setValueAtTime(0, t); tr.out.gain.linearRampToValueAtTime(g, t + Math.max(0.01, fadeIn));
       tr.send.gain.setValueAtTime(0, t); tr.send.gain.linearRampToValueAtTime(1, t + Math.max(0.01, fadeIn));
@@ -6181,9 +6460,28 @@ const LAYOUT = {
         tr.ch[k] = mkStrip(tr, mx[0], mx[1], mx[2], which === 'rhodes' ? 'pan' : which === 'vibes' ? 'amp' : null);
       }
       if (!tr.ch.dr) tr.ch.dr = tr.ch.drL = tr.ch.drR = tr.out;
+      if (S.bed && BEDS[S.bed[0]]) { tr.bedG = gain(S.bed[1], tr.out); E.needBed(S.bed[0], 2); songBed(tr, t); }   // (ROUND 24: a song's own record)
       E.tracks.push(tr); E.stats.tracks++;
       return tr;
     };
+    /** ROUND 24: a song's TAPE (SONGS[id].tape = { hp, lp, q, base, wow: [[Hz, seconds of delay swing], ...] }): the track's own
+     *  low cut and warm low-pass (its reverb send's too: the Rhodes' FM leaves a little DC the cut takes out) and a slow wow — a
+     *  delay line whose length breathes, so the pitch drifts by 2 pi f x depth (0.42 Hz x 1.1 ms = 0.3 %, 5 cents). On that
+     *  track only: a crossfade to another song never passes through it. */
+    function tapeChain(tr, T, t) {
+      const hp = E.filter('highpass', T.hp, 0.6, null), lp = E.filter('lowpass', T.lp, T.q, null), dl = ctx.createDelay(0.05), lp2 = E.filter('lowpass', T.lp, T.q, tr.sfo), hp2 = E.filter('highpass', T.hp, 0.6, lp2);
+      dl.delayTime.value = T.base; tr.out.connect(hp); hp.connect(lp); lp.connect(dl); dl.connect(tr.fo); tr.send.connect(hp2);
+      for (let i = 0; i < T.wow.length; i++) { const l = ctx.createOscillator(); l.frequency.value = T.wow[i][0]; l.connect(gain(T.wow[i][1], dl.delayTime)); l.start(t); tr.long.push(l); }
+    }
+    /** ROUND 24: a song's RECORD (SONGS[id].bed = [a BEDS name, level]): it loops on the track from the start, or fades in once its
+     *  buffer is built (pumpTrack asks again; offline renders build it at once) */
+    function songBed(tr, now) {
+      const b = E.beds[tr.song.bed[0]]; if (!b || tr.bedS) return;
+      const s = ctx.createBufferSource(), t = Math.max(tr.t0, now);
+      s.buffer = b; s.loop = true; s.connect(tr.bedG);
+      if (t > tr.t0 + 0.05) { tr.bedG.gain.setValueAtTime(0, t); tr.bedG.gain.linearRampToValueAtTime(tr.song.bed[1], t + 1.5); }
+      s.start(t, tr.rng.f() * b.duration); tr.long.push(s); tr.bedS = s;
+    }
     E.fadeTrack = (tr, t, f) => {
       if (!tr.alive) return; tr.alive = false;
       tr.fo.gain.setValueAtTime(1, t); tr.fo.gain.linearRampToValueAtTime(0, t + f); tr.sfo.gain.setValueAtTime(1, t); tr.sfo.gain.linearRampToValueAtTime(0, t + f);
@@ -6202,6 +6500,7 @@ const LAYOUT = {
     }
     function pumpTrack(tr, until, now) {
       const barLen = tr.song.beats * tr.spb;
+      if (tr.bedG && !tr.bedS) songBed(tr, now + 0.05);
       if (tr.ei >= tr.ev.length) while (tr.barT + barLen < now - 0.05) { tr.bar++; tr.barT += barLen; }   // stalled: skip, never burst
       for (let guard = 0; guard < 4096; guard++) {
         if (tr.ei >= tr.ev.length) { if (tr.barT > until) break; planBar(tr); tr.ei = 0; continue; }
@@ -9527,8 +9826,9 @@ const ROOMS = (() => {
     for (const sid in THEMES) { if (G.S.rooms[sid]) continue; const p = progress(sid); if (p.of && p.done >= p.of) { G.S.rooms[sid] = 1; out.push(sid); } }
     return out;
   }
-  /** the music for the room and the stations: the active room theme's own, or the shop's */
-  const song = () => { const a = active(); return a && AUDIO._theory && AUDIO._theory.songs().indexOf('room_' + a) >= 0 ? 'room_' + a : 'paint'; };
+  /** the music for the room and the stations: the active room theme's own, or the shop's (ROUND 24: 'lofi', the lo-fi Drying
+   *  Time — Alex: "change the default music (only for level 0, dont touch the others yet)"; the old 'paint' stays defined) */
+  const song = () => { const a = active(); return a && AUDIO._theory && AUDIO._theory.songs().indexOf('room_' + a) >= 0 ? 'room_' + a : 'lofi'; };
   /** the themes that have a room theme, in tier order (for the ROOM chooser): [{ sid, name, unlocked, done, of }] */
   const list = () => FIGDEF.SERIES.filter((sd) => THEMES[sd.id]).map((sd) => Object.assign({ sid: sd.id, name: THEMES[sd.id].name, unlocked: unlocked(sd.id) }, progress(sd.id)));
   return { THEMES, has, unlocked, progress, legendaryMW, active, set, check, apply, song, list };
