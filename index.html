@@ -14528,9 +14528,13 @@ const PROTO = {};
      UPGRADES      your level + the upgrade tracks          COMMISSIONS   patrons' letters: detailed orders, big rewards
      MIXING TABLE  mix pigments into paint pots (from level 4: the mixing milestone starts here)
    THE SIGN in the window says OPEN or CLOSED (tap it): while it is closed, nobody new comes in. Customers come in while you
-   are here too (SHOP.tick): the shop bell rings, and the counter's name plate shows who waits; a letter for the commission
-   board rings too. Your LEVEL is in the top band (HDUI); a level-up shows its banner here as well. THE SHOP'S RATING (round 18;
-   round 19: in the top band after the LV badge, the window's sticker gone): a tap opens what your customers think of the shop.
+   are here too (SHOP.tick, src/74_life.js): the shop bell rings; a letter for the commission board rings too. Your LEVEL is in
+   the top band (HDUI); a level-up shows its banner here as well. THE SHOP'S RATING (round 18; round 19: in the top band after
+   the LV badge, the window's sticker gone): a tap opens what your customers think of the shop.
+   ROUND 24 PLATES (Alex, 2026-10-20: "you can remove the names beeing always visible for workbench, counter etc. there is no need. what
+   is left as highlight is enough, e.g. mouseover and the infobar below"): NO NAME PLATES — a station is named only in the bottom
+   bar, while it is lit (hover, ◀ ▶). On the furniture only STATUS BADGES are left, wordless and only while there is something to
+   do (badge(), below).
    Hit-testing is exact: room_ids is the same bake with each station painted its id; a tap a few pixels off still finds the
    nearest station (a fingertip). Hover (mouse) or press (finger) lights the station and outlines it.
    Scene 'room' (params: from = a station id: start zoomed into it and pull back out).
@@ -14541,17 +14545,25 @@ const ROOMVIEW = {};
 (() => {
   'use strict';
   const BAR = 17, VT = BAR, VB = H - BAR;
-  // tag: where its name plate sits (on or next to its own furniture); focus: what the zoom flies into (its working surface)
+  // focus: what the zoom flies into (its working surface); badge: where its STATUS BADGE sits (round 24 plates: the name plates are gone —
+  // badge(), below), [its middle x, its top row]: placed clear of every head (the shopkeeper's at his five spots, the customers' at
+  // theirs), of the trophies on the sill and of the sign; a station that never has a badge has none (the padlock, LOCK_BADGE, takes
+  // a locked station's badge place)
   // (round 10: name and hint are N_() keys, translated where they are drawn — T(s.name), T(s.hint); lock() returns its text translated)
   const STATIONS = [
-    { key: 'counter', sid: 1, name: N_('COUNTER'), hint: N_('Put pieces out: customers buy from here'), tag: [164, 134], focus: [164, 122] },   // (ROUND 24: customers serve themselves — the counter is what they can buy, its station the stock manager)
-    { key: 'cabinet', sid: 2, name: N_('DISPLAY SHELF'), hint: N_('Your best pieces: each gives its boost'), tag: [163, 93], focus: [163, 52] },
-    { key: 'board', sid: 3, name: N_('UPGRADES'), hint: N_('Your level, and better tools and a finer shop'), tag: [240, 29], focus: [240, 33] },
-    { key: 'comm', sid: 7, name: N_('COMMISSIONS'), envelope: true, hint: N_('Patrons\' letters: detailed orders, big rewards'), tag: [240, 66], focus: [240, 58] },   // (round 15 review: on the board's lower frame — its letters show)
-    { key: 'bench', sid: 4, name: N_('WORKBENCH'), hint: N_('Buy and paint your figures'), tag: [80, 57], focus: [88, 84] },   // (round 15: on the bench's front, clear of the counter's left end; round 18: the supply shelf was part of it; round 19: the shelf is gone, one screen buys and paints; ROUND 24: up on the window's foot, right over the bench — clear of every customer's head (the highest, a waiter at the corner's wall end, starts at row 70): at its old place (80, 93) they covered it in 7 of a visit's 8 beats. 12 px left while the shopkeeper stands at the bench: OWNER.tagAt)
-    { key: 'mixer', sid: 5, name: N_('MIXING TABLE'), hint: N_('Mix pigments into paint pots'), lock: () => (SHOP.lvl() < SHOP.MIX_LV ? TF('The mixing table opens at level {lvl}', { lvl: SHOP.MIX_LV }) : null), tag: [240, 85], focus: [240, 77] },   // (round 17: one paint shelf on the wall — its plate under its middle, the zoom into its row of pots and jars)
-    { key: 'notebook', sid: 8, name: N_('NOTEBOOK'), parcel: true, hint: N_('Online auctions, parcels to send'), lock: () => (SHOP.lvl() < SHOP.MARKET_LV ? TF('The notebook opens at level {lvl}', { lvl: SHOP.MARKET_LV }) : null), tag: [268, 147], focus: [258, 112] },   // (round 15 review: lower, clear of the COUNTER plate's queue)
+    { key: 'counter', sid: 1, name: N_('COUNTER'), hint: N_('Put pieces out: customers buy from here'), focus: [164, 122] },   // (ROUND 24: customers serve themselves — the counter is what they can buy, its station the stock manager)
+    { key: 'cabinet', sid: 2, name: N_('DISPLAY SHELF'), hint: N_('Your best pieces: each gives its boost'), focus: [163, 52] },
+    { key: 'board', sid: 3, name: N_('UPGRADES'), hint: N_('Your level, and better tools and a finer shop'), focus: [240, 33] },
+    { key: 'comm', sid: 7, name: N_('COMMISSIONS'), hint: N_('Patrons\' letters: detailed orders, big rewards'), badge: [240, 65], focus: [240, 58] },   // (the letters' badge: on the board's lower frame, where round 15's envelope plate sat (a row higher: its border clear of the paint shelf's jars under it, which are the MIXING TABLE's) — its letters show above it)
+    { key: 'bench', sid: 4, name: N_('WORKBENCH'), hint: N_('Buy and paint your figures'), badge: [53, 48], focus: [88, 84] },   // (the pin's badge: on the plain wall beside the window, over the bench's back-left corner — left of the window's frame and the trophies' spots (from x 67), over every customer's head (from row 71) and the marks over them (from row 57), clear of the shopkeeper at the bench (his head from x 88) and of the sign (to row 42))
+    { key: 'mixer', sid: 5, name: N_('MIXING TABLE'), hint: N_('Mix pigments into paint pots'), lock: () => (SHOP.lvl() < SHOP.MIX_LV ? TF('The mixing table opens at level {lvl}', { lvl: SHOP.MIX_LV }) : null), badge: [240, 85], focus: [240, 77] },   // (round 17: one paint shelf on the wall, the zoom into its row of pots and jars; its badge place: the padlock's, LOCK_BADGE)
+    { key: 'notebook', sid: 8, name: N_('NOTEBOOK'), hint: N_('Online auctions, parcels to send'), lock: () => (SHOP.lvl() < SHOP.MARKET_LV ? TF('The notebook opens at level {lvl}', { lvl: SHOP.MARKET_LV }) : null), badge: [268, 147], focus: [258, 112] },   // (the parcels' badge: on the desk's lower front, under the shopkeeper behind the desk)
   ];
+  /** ROUND 24 PLATES (D3): a LOCKED station's badge — false: none (Alex's call: the bottom bar and the tap's note say when it opens); true: a
+   *  small padlock at its badge place (the mixing table under level SHOP.MIX_LV, the notebook under SHOP.MARKET_LV). The tests flip
+   *  BADGES.lock (DEV.room.BADGES) to see the padlock; the game reads it from here */
+  const LOCK_BADGE = false;
+  const BADGES = { lock: LOCK_BADGE };
   // the room camera (tools/bake3d/models/room.mjs ROOM_CAMS.hub) and where things stand, to draw the player's pieces into the room —
   // round 15: from the bake itself (src/25_roomdata.js, written with the room's bakes: tools/bake3d/models/room.mjs ANCHORS)
   const RD = ART.room, CAM = RD.cam, AN = RD.anchors;
@@ -14561,7 +14573,7 @@ const ROOMVIEW = {};
   /** the ◀ ▶ walk through the stations, left to right as they stand (round 15: the new room; the sign after the workbench), then
    *  the top band's stops (round 19: the rating, then the room's title) */
   const WALK = ['bench', 'cabinet', 'counter', 'board', 'comm', 'mixer', 'notebook'];
-  const ZOOM_T = 0.34, PICK_R = 6;   // the zoom's length (s); a press this many px off a station still picks it
+  const ZOOM_T = 0.34, PICK_R = 6;   // the zoom's length (s); a press this many px off a station still picks it (round 24 plates: never lower it — with no name plates the WORKBENCH and the MIXING TABLE reach 36 pt only through it, their own pixels a 16 px square: tools/layout_lint.mjs --stations)
   const RM = { L: null, cv: null, ids: null, I: null, st: null, hover: null, press: null, zoom: null, msg: '', msgT: 9, zb: null, t: 0, keyT: -9, btns: [] };
   /** the station id under frame pixel (x, y) (room_ids: baked past the frame like the room, M3) */
   const idAt = (x, y) => { const I = RM.I, lx = x - I.x0, ly = y - I.y0; return lx < 0 || ly < 0 || lx >= I.w || ly >= I.h ? 0 : I.zone[ly * I.w + lx]; };
@@ -14645,12 +14657,12 @@ const ROOMVIEW = {};
       else if ((x > 0 && I.zone[i - 1] === s.sid) || (x < iw - 1 && I.zone[i + 1] === s.sid) || (y > 0 && I.zone[i - iw] === s.sid) || (y < ih - 1 && I.zone[i + iw] === s.sid)) edgeW.push(i);
     }
     const old = RM.st && RM.st.find((q) => q.key === s.key);
-    return Object.assign({}, s, { px, edge: Int32Array.from(new Set(edge)), pxW: Int32Array.from(pxW), edgeW: Int32Array.from(edgeW), x0, y0, x1, y1, cx: n ? sx / n : W / 2, cy: n ? sy / n : H / 2, tagR: old ? old.tagR : null });
+    return Object.assign({}, s, { px, edge: Int32Array.from(new Set(edge)), pxW: Int32Array.from(pxW), edgeW: Int32Array.from(edgeW), x0, y0, x1, y1, cx: n ? sx / n : W / 2, cy: n ? sy / n : H / 2, badgeR: old ? old.badgeR : null, badgeK: old ? old.badgeK : null });
   }
   /** the station under (x, y), or the nearest one within PICK_R px (a fingertip lands a little off) */
   function stationAt(x, y) {
     if (x < 0 || y < VT || y >= VB) return null;
-    for (const s of RM.st) if (s.tagR && x >= s.tagR[0] && x < s.tagR[0] + s.tagR[2] && y >= s.tagR[1] - 1 && y < s.tagR[1] + s.tagR[3] + 1) return s;   // a name plate opens its own station
+    for (const s of RM.st) { const R = s.badgeR; if (R && x >= R[0] && x < R[0] + R[2] && y >= R[1] && y < R[1] + R[3]) return s; }   // (round 24 plates) a badge opens its own station (its whole drawn rect, the border too)
     { const R = signRect(), inR = x >= R.x && x < R.x + R.w && y >= R.y && y < R.y + R.h, near = x >= R.x - 2 && x < R.x + R.w + 2 && y >= R.y - 4 && y < R.y + R.h + 2;
       if (inR || (near && !idAt(x, y))) return SIGN_ST; }   // the sign (round 15: its tier's size; its fingertip margin only where no station is — the review)
     { const o = RM.own && RM.own[y * W + x]; if (o) return RM.st.find((s) => s.sid === o) || null; }   // a piece drawn into the room answers for its place (the review: a counter piece's head stood over the display shelf)
@@ -14695,7 +14707,7 @@ const ROOMVIEW = {};
       const nu = ROOMS.check(); if (nu.length) { G.save(); AUDIO.sfx('legendary_chime'); RM.msg = unlockNote(nu); RM.msgT = -2; }
       ROOMS.apply(); AUDIO.music(ROOMS.song()); AUDIO.ambience('indoor');
       if (typeof DEV !== 'undefined') DEV.room = { RM, STATIONS, SIGN, TITLE_ST, stationAt, go, idAt, pickRows, PROJ, AN, signRect, PIECE, depthAt, d8, piece, init, openMenu, MENU_ROWS, menuAt, RATE_ST, openRate, RATE_BOX, WALK, rateEffect,
-        RCOL, openCard, closeCard, custStop, walkOrder, waiterNote, CARD, BLOCK };   // (round 24: the cards, the ◀ ▶ walk with its customer stop)
+        RCOL, openCard, closeCard, custStop, walkOrder, waiterNote, CARD, BLOCK, LOCK_BADGE, BADGES, badgeOf };   // (round 24: the cards, the ◀ ▶ walk with its customer stop; round 24 plates: the badges)
       if (typeof OWNER !== 'undefined') OWNER.enter(p);   // OWNER hook 1/10: the shopkeeper at the station you come back from (src/72_owner.js)
       if (typeof LIFE !== 'undefined' && LIFE.enter) LIFE.enter(p);   // LIFE hook 1: the customers, each mid-visit, rebuilt from SHOP's records (src/74_life.js)
     },
@@ -14736,8 +14748,9 @@ const ROOMVIEW = {};
       if ((b && b.id === 'gear') || IN.keyPressed('KeyS')) { IN.click = false; AUDIO.sfx('ui_select'); if (typeof SETTINGS !== 'undefined') SETTINGS.open(); return; }   // round 15 (Alex: "make settings accessible in the game not just main menu")
       if (IN.pressed('cancel') || (b && b.id === 'menu')) { IN.click = false; openMenu(); return; }   // round 16: the band's left corner (or Esc) opens THE MENU
       if (IN.click) {   // ROUND 24 (DESIGN_SHOP_LIFE §3.9), in this order: a waiting customer's "!" / "?" (their bubble or them) → their card;
-        //               a name plate or a station (a browser's pixels pass through to the station behind); a browser → their little
-        //               reaction (LIFE); else the floor, the corner (he walks to the nearest point of his floor) or the door (nothing)
+        //               a badge (round 24 plates: the name plates are gone) or a station (a browser's pixels pass through to the station
+        //               behind); a browser → their little reaction (LIFE); else the floor, the corner (he walks to the nearest point
+        //               of his floor) or the door (nothing)
         const x = IN.mx, y = IN.my, L = typeof LIFE !== 'undefined' ? LIFE : null; IN.click = false;
         const wc = L && L.waiterAt ? L.waiterAt(x, y) : null;
         if (wc !== null && wc !== undefined && openCard(wc)) { /* the card */ }
@@ -14766,12 +14779,14 @@ const ROOMVIEW = {};
       if (!RM.own) RM.own = new Uint8Array(W * H); else RM.own.fill(0); drawPieces(); trophies();
       if (lit && lit.sid) for (let i = 0; i < RM.own.length; i++) if (RM.own[i] === lit.sid) FB[i] = LIGHT[1][FB[i]];   // (its own pieces light with it)
       HD.motes(VT, VB);
-      for (const s of RM.st) { s.tagR = null; if (!RM.zoom && !RM.pick && !RM.menu && !RM.rate) tag(s, s === lit); }   // (the room's name plates stay out from under the list, and the menu)
-      // OWNER hook 4/10, LIFE hook 4: after the name plates (the back ones under the people), before PFX and the zoom — round 24: LIFE
-      // draws everyone far to near, the shopkeeper among the customers (it calls OWNER.draw() at his place), their marks and props;
-      // the waiter the ◀ ▶ walk stands on has its bubble lit
+      const badges = !RM.zoom && !RM.pick && !RM.menu && !RM.rate;   // (round 24 plates: the badges stay out from under the list, the menu, the rating and the zoom, as the name plates did)
+      for (const s of RM.st) badgeOf(s, badges);   // (where each badge goes this frame — before the people: CAST's emote rule keeps their marks off it)
+      // OWNER hook 4/10, LIFE hook 4: before PFX and the zoom (round 24 plates: the name plates are gone; the badges are drawn over the people,
+      // below) — round 24: LIFE draws everyone far to near, the shopkeeper among the customers (it calls OWNER.draw() at his place),
+      // their marks and props; the waiter the ◀ ▶ walk stands on has its bubble lit
       if (typeof LIFE !== 'undefined' && LIFE.draw) { if (LIFE.lit) LIFE.lit(lit && lit.key === 'cust' ? lit.cid : null); LIFE.draw(); }
       else if (typeof OWNER !== 'undefined') OWNER.draw();
+      for (const s of RM.st) if (s.badgeR) badge(s, s === lit);   // (round 24 plates: the STATUS BADGES, over the people — their places keep clear of every head)
       PFX.draw(1);
       if (RM.zoom) zoomDraw(RM.zoom);
       // the bands
@@ -15227,33 +15242,53 @@ const ROOMVIEW = {};
       cardBtns(K, [['notnow', T('NOT NOW')], ['accept', T('ACCEPT'), { primary: true }]], x + (w >> 1), by);
     }
   }
-  /** a station's name plate, on its own furniture (a tap on it opens that station); a locked one says its level; the plans board's
-   *  says READY when a renovation can be built. ROUND 24: the COUNTER's plate shows no heads and no "!" any more — the customers walk
-   *  in the room themselves (src/74_life.js), and only a "!" or "?" over a customer's own head needs you */
-  function tag(s, on) {
-    const q = [], nc = G.S && s.key === 'comm' ? (G.S.comm || []).length : G.S && s.key === 'notebook' ? (G.S.orders || []).length : 0, ready = nc > 0;
-    if (s.envelope) {   // the commission board is narrow: its plate is an envelope and how many letters wait (it fits on the board)
-      const label = nc ? String(nc) : '', w = 12 + (label ? textW(label, FONT_S) + 2 : 0), x0 = Math.round(s.tag[0] - w / 2), y = s.tag[1];
-      s.tagR = [x0, y - 1, w, 8];
-      remapRect(x0, y - 1, w, 8, DARK[on ? 4 : 3]); rectb(x0 - 1, y - 2, w + 2, 10, on ? C.Y5 : ready ? C.Y4 : C.UI0);
-      rect(x0 + 2, y, 8, 6, on ? C.PAP4 : C.PAP3); line(x0 + 2, y, x0 + 5, y + 3, C.PAP1); line(x0 + 9, y, x0 + 6, y + 3, C.PAP1); pset(x0 + 5, y + 4, C.R4); pset(x0 + 6, y + 4, C.R4);   // a sealed letter
-      if (label) textO(label, x0 + 12, y, on || ready ? C.Y6 : C.CRM1, C.UI0, FONT_S, 1, 0);
-      if (nc && RM.letterT !== undefined && RM.t - RM.letterT < 1.6) { const b = Math.round(Math.sin((RM.t - RM.letterT) * 14) * 1.5); textO('!', x0 + w + 4, y - 1 + b, C.Y7, C.UI0, FONT_M, 1, 1); }
-      return;
-    }
-    const pinB = !!(G.S && s.key === 'bench' && SHOP.pinned());   // (round 16: a pinned order waits at the workbench — a red pin on its plate; round 17: a pinned letter)
-    const lk = lockOf(s), nm = T(s.name), label = lk ? TF('{name} · LV {lvl}', { name: nm, lvl: s.key === 'notebook' ? SHOP.MARKET_LV : SHOP.MIX_LV }) : nc && s.parcel ? TF('{name} · {count} TO SEND', { name: nm, count: nc }) : nm, w = textW(label, FONT_S) + 6 + (q.length ? 4 + q.length * 8 : 0) + (pinB ? 8 : 0);
-    const tg = (s.key === 'bench' && RM.trophies && RM.trophies.shown > 0 ? BENCH_UP : null) || (typeof OWNER !== 'undefined' && OWNER.tagAt && OWNER.tagAt(s)) || s.tag, x = Math.round(clamp(tg[0], w / 2 + 2, W - w / 2 - 2)), y = tg[1], x0 = x - (w >> 1);   // OWNER hook 6/10: the DISPLAY SHELF plate over the shopkeeper's head at home, the WORKBENCH plate 12 px left while he stands at the bench (src/72_owner.js tagAt; null: its own place)
-    s.tagR = [x0, y - 1, w, 8];
-    remapRect(x0, y - 1, w, 8, DARK[on ? 4 : 3]); rectb(x0 - 1, y - 2, w + 2, 10, on ? C.Y5 : ready ? C.Y4 : C.UI0);
-    textO(label, x0 + 3, y, on ? C.Y6 : ready ? C.Y6 : lk ? C.CRM0 : C.CRM1, C.UI0, FONT_S, 1, 0);
-    if (pinB) { const px = x0 + textW(label, FONT_S) + 6, py = y - 1; circf(px + 2, py + 2, 2, C.R4); pset(px + 1, py + 1, C.PNK2); vline(px + 2, py + 5, py + 7, C.UI0); }
+  // ---- ROUND 24 PLATES (Alex, 2026-10-20: "you can remove the names beeing always visible for workbench, counter etc. there is no need.
+  //      what is left as highlight is enough, e.g. mouseover and the infobar below"): NO NAME PLATES. A station is named only in the
+  //      bottom bar while it is lit (hover, ◀ ▶: its name and hint, or its lock text); a tap opens it (a locked one says when it opens).
+  //      What is left on the furniture are STATUS BADGES — the name plates' dark backing and thin border (yellow while it asks for
+  //      you), an icon and digits, no word — drawn ONLY while there is something to do:
+  //      - COMMISSIONS: the sealed letter and how many letters wait (round 15's envelope plate; its "!" bounces as a letter comes);
+  //      - NOTEBOOK: a parcel and how many wait to be sent;
+  //      - WORKBENCH: the red pin while an order or a letter is pinned (a reminder, not a request: its border stays dark);
+  //      - a LOCKED station: none (LOCK_BADGE: a small padlock).
+  //      A badge is a tap target for its station (stationAt: its whole drawn rect, first). Each has ONE place (STATIONS[].badge), clear of
+  //      every head at every still spot — the shopkeeper's, the customers' — of the trophies and of the sign: no dodges. They are drawn
+  //      over the people (a walker passing never hides one) and the emote rule keeps the people's marks off them (src/73_cast.js)
+  /** where station s's badge goes this frame (show: the room is up — not under the list, the menu, the rating or the zoom) →
+   *  s.badgeR, its whole drawn rect [x, y, w, h] (null: none), and s.badgeK, what it draws */
+  function badgeOf(s, show = true) {
+    s.badgeR = null; s.badgeK = null;
+    if (!show || !G.S || !s.badge) return null;
+    let k = null, n = 0;
+    if (lockOf(s)) k = BADGES.lock ? 'lock' : null;   // (a locked station: no badge — or the padlock)
+    else if (s.key === 'comm') { n = (G.S.comm || []).length; if (n) k = 'letter'; }
+    else if (s.key === 'notebook') { n = (G.S.orders || []).length; if (n) k = 'parcel'; }
+    else if (s.key === 'bench' && SHOP.pinned()) k = 'pin';   // (round 16: a pinned order; round 17: a pinned letter)
+    if (!k) return null;
+    const label = n ? String(n) : '', w = label ? 14 + textW(label, FONT_S) : 9, x0 = Math.round(s.badge[0] - w / 2), y = s.badge[1];   // (an icon and its digits, or an icon alone)
+    s.badgeK = { k, n, label, x0, y, w, asks: k === 'letter' || k === 'parcel' };
+    s.badgeR = [x0 - 1, y - 2, w + 2, 10];
+    return s.badgeR;
   }
-  /** ROUND 24: the WORKBENCH plate's place while trophies stand on the window sill — its own (80, 57) is on the sill's front, over
-   *  the trophies' spots (x 69…124, rows 53…69: a theme's Legendary painted as a Masterwork, late in the game); up here, rows 43…52,
-   *  it is clear of them, of the SHOP SIGN over it (to row 42 at its top level) and still of every customer's head (row 70 on) and
-   *  the shopkeeper's at the bench (row 61) */
-  const BENCH_UP = [80, 45];
+  /** the badges' icons, a pixel a character ('.': the badge's backing shows) — a parcel in kraft with its twine, the pin (a red head
+   *  and its steel point), the padlock (a steel shackle, a brass body, its keyhole) */
+  const BADGE_ICON = {
+    parcel: { rows: ['TTTwTTTT', 'TTTwTTTT', 'KKKwKKKK', 'wwwwwwww', 'KKKwKKKK', 'dddwdddd'], pal: { T: 'CRK5', K: 'CRK4', d: 'CRK3', w: 'CRM1' } },
+    pin: { rows: ['..RRR..', '.RhRRR.', '.RRRRR.', '..rRr..', '...s...', '...s...', '...s...'], pal: { R: 'R4', h: 'PNK2', r: 'R3', s: 'STL5' } },
+    lock: { rows: ['..sss..', '.s...s.', '.s...s.', 'YYYYYYY', 'YYYkYYY', 'YYYkYYY', 'yyyyyyy'], pal: { s: 'STL5', Y: 'Y5', y: 'Y3', k: 'UI0' } },
+  };
+  function badgeIcon(I, x, y) { I.rows.forEach((r, dy) => { for (let dx = 0; dx < r.length; dx++) { const c = I.pal[r[dx]]; if (c) pset(x + dx, y + dy, C[c]); } }); }
+  /** station s's badge (badgeOf placed it this frame), lit with its station (on: hover, ◀ ▶) */
+  function badge(s, on) {
+    const B = s.badgeK; if (!B) return;
+    const { x0, y, w } = B;
+    remapRect(x0, y - 1, w, 8, DARK[on ? 4 : 3]); rectb(x0 - 1, y - 2, w + 2, 10, on ? C.Y5 : B.asks ? C.Y4 : C.UI0);
+    if (B.k === 'letter') { rect(x0 + 2, y, 8, 6, on ? C.PAP4 : C.PAP3); line(x0 + 2, y, x0 + 5, y + 3, C.PAP1); line(x0 + 9, y, x0 + 6, y + 3, C.PAP1); pset(x0 + 5, y + 4, C.R4); pset(x0 + 6, y + 4, C.R4); }   // a sealed letter (round 15's)
+    else if (B.k === 'parcel') badgeIcon(BADGE_ICON.parcel, x0 + 2, y);
+    else badgeIcon(BADGE_ICON[B.k], x0 + 1, y - 1);
+    if (B.label) textO(B.label, x0 + 12, y, on || B.asks ? C.Y6 : C.CRM1, C.UI0, FONT_S, 1, 0);
+    if (B.k === 'letter' && RM.letterT !== undefined && RM.t - RM.letterT < 1.6) { const b = Math.round(Math.sin((RM.t - RM.letterT) * 14) * 1.5); textO('!', x0 + w + 4, y - 1 + b, C.Y7, C.UI0, FONT_M, 1, 1); }   // (a letter just came: its "!" bounces)
+  }
   /** the customers' rarities as colours (white, green, blue, purple; M5: a Legendary curator's orange), as the figures' — the "!"
    *  ring of THE OFFER, the cards' portraits (round 24; round 18-23: a waiting customer's collar on the COUNTER plate) */
   const RCOL = ['CRM2', 'G6', 'B6', 'V6', 'O5'];
@@ -15462,7 +15497,7 @@ const ROOMVIEW = {};
   //      material such as COUNTER 3's marble), step() runs it a few steps a frame (a budget of ms: the card opens without a hitch,
   //      the picture follows when it is ready, a few frames later), shot(rect) draws the room's picture as the room's draw()
   //      does — the sky and the SHOP WINDOW's tiers, the DESK LAMP's light, the shelf's dark spots, the SHOP SIGN, your pieces and
-  //      the trophies; not the name plates, the bands, a lit station or the dust — and returns the rect at 2x, its text as sharp as
+  //      the trophies; not the badges (round 24 plates; the name plates before), the bands, a lit station or the dust — and returns the rect at 2x, its text as sharp as
   //      the room's own (the 2x text layer, as compose2x). The build stays the room's: back in the room nothing is built again.
   //      VIEWS: where each upgrade TRACK (src/64_shop.js TRACKS) shows — the top-left corner of its rect in the frame (VIEW.w x
   //      VIEW.h, inside the room's part of the frame: rows 18 … 161, between the bands' edge lines), as [from level, x, y] (the
@@ -15476,7 +15511,7 @@ const ROOMVIEW = {};
     lamp: [[1, 14, 40]],                      // the workbench's left end: the lamp over the mat (its light on the bench)
     brush: [[1, 46, 44]],                     // the workbench's right end: the brushes, the jars, the rack
     supplier: [[1, 18, 62]],                  // under the workbench's left end: the low shelf's row, the corner shelf and its sign beside the bench
-    board: [[1, 180, 22]],                    // PATRONS: the commission board, its frame, the name plate, the little shelf (to y 81), the picture light
+    board: [[1, 180, 22]],                    // PATRONS: the commission board, its frame, the brass name plate, the little shelf (to y 81), the picture light
     tea: [[1, 0, 102], [7, 0, 62], [8, 0, 102]],   // ROUND 24: the EXPLORATION CORNER (the TEA CORNER track keeps its id), front left: the corner from the left wall to the way in, its lower shelf and the floor under it (levels 1-2 fill that shelf: the spec's [0, 90] kept only 62% / 44% of them — A1 measured these, (63)(h)'s way: 93-100% at every level); at 7 the contest shelf on the wall over its end
     lights: [[1, 99, 38]],                    // SHELF SPACE: the display shelf's middle and bottom shelves, their spots lit one a level (the review: from 28 the top shelf's pieces were cut at the waist)
     web: [[1, 192, 80]],                      // WEBSHOP: the notebook desk
@@ -15587,15 +15622,16 @@ const ROOMVIEW = {};
         apron's paint spots take the player's last three paints;
      6. DECALS: a blink and shut eyes (the eyelid's skin), the mouth open, the glint on his glasses;
      7. OUTLINE: the pieces' own 1-px sel-out ring (HD.BOT: the darkest step of the ramp beside it — never black).
-   THE COMPOSITE, per pixel, after the room's name plates (src/63_room.js draw, OWNER hook 4/10): rows 18 … 161 (between the
+   THE COMPOSITE, per pixel, into the room (src/63_room.js draw, OWNER hook 4/10; round 24 plates: no name plates — the room's badges are
+   drawn over the people after): rows 18 … 161 (between the
    bands' edge lines); the dissolve (PROTO.dissolveBlit's own per-pixel noise, in frame pixels); the counter's pieces stay in
-   front (RM.own 1); the COUNTER and NOTEBOOK plates stay in front (their drawn rect); the ROOM'S DEPTH (RM.L.depth, every
+   front (RM.own 1); the ROOM'S DEPTH (RM.L.depth, every
    dressing in it: the counter, the tea bar, the laptop lid, the parcels hide him by themselves), per pixel so his hands on the
    counter top show while his belly behind it does not; the OCCLUSION LINE where the room passes in front of him (the room's
    far-side line: 2 steps down, the counter's edge crisp across him); the 2x text under him dropped (T2.own); his station's id in
    RM.own (o.sid; 0 leaves the furniture's own). Before him the CONTACT SHADOW on the floor round his feet; on him the DESK LAMP's
-   pool (lampLight's own ellipse); over him an emote glyph, clear of the plates (over his head, else beside it, else — a plate
-   right over his head — beside his face).
+   pool (lampLight's own ellipse); over him an emote glyph, clear of the room's badges (over his head, else beside it, else — a
+   badge right over his head — beside his face).
    CACHE: an LRU of 128 shrunk frames (frame, flip, k, shear), each mapped for its light step and look; at most one built per frame
    (a second one waits a frame, his previous frame shown). Nothing is allocated per frame on the hot path.
      CAST.draw(id, o) -> { box: [x0, y0, x1, y1] (the pixels drawn), n, full, feet, top }   o = { frame: 'walk_sw_3', flip,
@@ -15623,7 +15659,7 @@ const ROOMVIEW = {};
      o.prop: 'bag' | 'gift' | 'letter' in the right hand (the manifest's hand point per frame, depth-tested against the room and his
        own body, a 1-px dark outline; o.swing px sideways);
      o.emote.style: 'quiet' (a bare glyph: as before), 'chat' (a small dark bubble with a tiny picture, o.emote.icon) — both by the
-       emote rule, clear of the plates —, 'loud' (the cream bubble with a red '!' or a blue '?', a ring in o.emote.ring's colour,
+       emote rule, clear of the badges —, 'loud' (the cream bubble with a red '!' or a blue '?', a ring in o.emote.ring's colour,
        always over the head: they pop only at the corner's wall end); CAST.emoteAt(id, inst, em) draws one over a cast's last draw
        (a second pass: the marks over every body)
    ============================================================================= */
@@ -16089,23 +16125,12 @@ const CAST = (() => {
   }
 
   // ---- the draw
-  /** the drawn rects of the COUNTER and NOTEBOOK plates (they stay in front of him): [x0, y0, x1, y1] x 2, inclusive; empty: x0 > x1 */
-  const PL = new Int16Array(8);
-  function frontPlates(RM) {
-    PL[0] = 1; PL[2] = 0; PL[4] = 1; PL[6] = 0;
-    const st = RM.st; if (!st) return;
-    for (let q = 0; q < st.length; q++) {
-      const s = st[q], t = s.tagR; if (!t) continue;
-      const o = s.key === 'counter' ? 0 : s.key === 'notebook' ? 4 : -1; if (o < 0) continue;
-      const qn = s.key === 'counter' && typeof G !== 'undefined' && G.S && G.S.q && G.S.q.length ? 8 : 0;   // (the counter's '!' when someone waits)
-      PL[o] = t[0] - 1; PL[o + 1] = t[1] - 1; PL[o + 2] = t[0] + t[2] + qn; PL[o + 3] = t[1] + t[3];
-    }
-  }
-  const inPL = (X, Y) => (X >= PL[0] && X <= PL[2] && Y >= PL[1] && Y <= PL[3]) || (X >= PL[4] && X <= PL[6] && Y >= PL[5] && Y <= PL[7]);
-  /** the plates' rects (all of them, for the emote): true when (x0..x1, y0..y1) touches one */
-  function onPlate(RM, x0, y0, x1, y1) {
+  /** ROUND 24 PLATES: the room's badges' rects (src/63_room.js badgeOf: COMMISSIONS' letters, NOTEBOOK's parcels, WORKBENCH's pin — drawn over
+   *  the people, after them; the name plates and their COUNTER and NOTEBOOK 'front plates' are gone): true when (x0..x1, y0..y1)
+   *  touches one — the emote rule keeps a mark off them */
+  function onBadge(RM, x0, y0, x1, y1) {
     const st = RM.st; if (!st) return false;
-    for (let q = 0; q < st.length; q++) { const t = st[q].tagR; if (t && x1 >= t[0] - 2 && x0 <= t[0] + t[2] + 1 && y1 >= t[1] - 2 && y0 <= t[1] + t[3] + 1) return true; }
+    for (let q = 0; q < st.length; q++) { const t = st[q].badgeR; if (t && x1 >= t[0] - 1 && x0 <= t[0] + t[2] && y1 >= t[1] - 1 && y0 <= t[1] + t[3]) return true; }
     return false;
   }
   const EMO = { '!': 'Y7', '?': 'CRM2', '♪': 'CRM2', '♥': 'PNK2', '★': 'Y6', '¤': 'Y6' };
@@ -16149,7 +16174,6 @@ const CAST = (() => {
     if (fade <= 0) { s.stats.lastDrawMs = PERF.now() - t0; return R; }
     // ---- the room as it is now (read every frame: never keep its arrays)
     const dep = L.depth, lw = L.w, lh = L.h, lx0 = L.x0, ly0 = L.y0, own = RM.own, sid = o.sid | 0, t2 = T2.n ? T2.own : null, C3 = cam();
-    frontPlates(RM);
     const mask = s.mask, stamp = s.stamp, base = (dist - C3.near - 4) / C3.step, rk = 1.5 / C3.step;
     // ROUND 24, THE BLEED (o.bleed, a customer): past the band's edge line too — the band's rows into the frame (the band darkens them
     // as the floor there), the strips under the frame into the wide backdrop (the band's op darkens them): to the screen's bottom
@@ -16164,7 +16188,7 @@ const CAST = (() => {
       for (let Y = ya; Y <= yb; Y++) { const dy = (Y - fy) / ry, rowL = (Y - ly0) * lw - lx0, inF = Y < H;
         for (let X = xa; X <= xb; X++) {
           const dx = (X - fx) / rx; if (dx * dx + dy * dy > 1) continue;
-          const li = rowL + X, i = Y * W + X; if (!FLOORS[zl[li]] || dep[li] < dF || (inF && (own[i] || inPL(X, Y)))) continue;
+          const li = rowL + X, i = Y * W + X; if (!FLOORS[zl[li]] || dep[li] < dF || (inF && own[i])) continue;
           if (fade < 1 && (hash(i) > fth) !== out) continue;
           const tb = dx * dx + dy * dy < SH_CORE ? DARK[2] : DARK[1];
           if (inF) { if (t2 && t2[i]) _t2Map(i, tb); FB[i] = tb[FB[i]]; } else if (WBd) { const wi = (Y + WBd.dy) * WBd.w + X + WBd.dx; WBd.d[wi] = tb[WBd.d[wi]]; }
@@ -16185,7 +16209,7 @@ const CAST = (() => {
         const X = OX + px[j]; if (X < 0 || X >= W) continue;
         const i = rowF + X;
         if (fade < 1 && (hash(i) > fth) !== out) continue;
-        if (inF && (own[i] === 1 || inPL(X, Y))) continue;   // the counter's pieces and the front plates stay in front of him
+        if (inF && own[i] === 1) continue;   // the counter's pieces stay in front of him (round 24 plates: no front plates any more)
         let D = round(base + rel[j] * rk); if (D < 0) D = 0; else if (D > 254) D = 254;
         const li = rowL + X; if (dep[li] < D) continue;   // the room (and every dressing in it) nearer: hidden
         let c = col[j];
@@ -16198,7 +16222,7 @@ const CAST = (() => {
         if (X < bx0) bx0 = X; if (X > bx1) bx1 = X; if (Y < by0) by0 = Y; if (Y > by1) by1 = Y;
       }
     }
-    // his outline: the darkest step of the ramp beside it (the depth, the plates and the counter's pieces as his own pixel's)
+    // his outline: the darkest step of the ramp beside it (the depth and the counter's pieces as his own pixel's)
     const rpx = e.rpx, rnb = e.rnb, rrs = e.rrs, far = o.outline === 'far'; let nr = 0;   // (outline 'far': the furniture's own line, the room behind him 2 steps down, for the look test — else the pieces' sel-out)
     for (let ty = 0; ty < e.sh; ty++) {
       const Y = OY + ty; if (Y < ROW0 || Y > yLast) continue;
@@ -16207,7 +16231,7 @@ const CAST = (() => {
         const X = OX + rpx[j]; if (X < 0 || X >= W) continue;
         const i = rowF + X;
         if (fade < 1 && (hash(i) > fth) !== out) continue;
-        if (inF && (own[i] === 1 || inPL(X, Y))) continue;
+        if (inF && own[i] === 1) continue;
         const nb = rnb[j]; let D = round(base + rel[nb] * rk); if (D < 0) D = 0; else if (D > 254) D = 254;
         if (dep[rowL + X] < D) continue;
         if (!inF) { if (WBd) { const wi = (Y + WBd.dy) * WBd.w + X + WBd.dx; WBd.d[wi] = far ? HD.down(WBd.d[wi], 2) : BOT[col[nb]]; } continue; }
@@ -16226,7 +16250,7 @@ const CAST = (() => {
         n += prop(o.prop, round(hx + (o.swing || 0)), round(hy), hd, mask, stamp, dm, WBd, yLast, fade, fth, out, dep, lw, lx0, ly0, own);
       }
     }
-    // an emote over his head, clear of the name plates
+    // an emote over his head, clear of the room's badges
     const em = o.emote; if (em && (em.ch || em.icon) && fade >= 0.5) emote(RM, em, R.top[0], R.full[1]);
     const ms = PERF.now() - t0; s.stats.lastDrawMs = ms; if (ms > s.stats.maxDrawMs) s.stats.maxDrawMs = ms; s.stats.lastN = n; s.stats.lastRing = nr;
     return R;
@@ -16245,7 +16269,7 @@ const CAST = (() => {
     return out;
   }
   // ---- ROUND 24: THE PROPS a customer carries (DESIGN §3.1): a kraft bag with a sage band, a gift box with a gold ribbon (a
-  //      Legendary), a sealed letter (the COMMISSIONS plate's own envelope) — pixel rows, a 1-px dark outline (a bag without one
+  //      Legendary), a sealed letter (the COMMISSIONS badge's own envelope) — pixel rows, a 1-px dark outline (a bag without one
   //      vanished on a yellow cardigan: the refs lane), the hand at [ax, ay] (the bag's handle, the box's bow, the letter's middle)
   const PROPS = {
     bag: { ax: 3, ay: 0, rows: ['..oooo..', '..o..o..', 'oohoohoo', 'oTTTTTTo', 'oKKKKKdo', 'oSSSSSSo', 'osssssso', 'oKKKKKdo', 'oKKKKKdo', 'oooooooo'], pal: { o: 'UI0', h: 'CRK2', T: 'CRK5', K: 'CRK4', d: 'CRK2', S: 'SGE4', s: 'SGE3' } },
@@ -16261,7 +16285,7 @@ const CAST = (() => {
       const X = hx + a[q], Y = hy + a[q + 1]; if (X < 0 || X >= W || Y < ROW0 || Y > yLast) continue;
       const i = Y * W + X, inF = Y < H, c = C[P.pal[a[q + 2]]]; if (c === void 0) continue;
       if (fade < 1 && (hash(i) > fth) !== out) continue;
-      if (inF && (own[i] === 1 || inPL(X, Y))) continue;
+      if (inF && own[i] === 1) continue;
       const li = (Y - ly0) * lw - lx0 + X; if (hd >= 0 && dep[li] < hd) continue;
       if (inF && hd >= 0 && dm && mask[i] === stamp && dm[i] < hd - 2) continue;   // (his body in front of his hand)
       if (!inF) { if (WBd) WBd.d[(Y + WBd.dy) * WBd.w + X + WBd.dx] = c; continue; }
@@ -16270,9 +16294,10 @@ const CAST = (() => {
     return n;
   }
   // ---- the emote over a head (round 24: three styles). quiet: a bare glyph (♪ ♥ … ¤ ★ !) — chat: a small dark bubble with a tiny
-  //      picture — both by the emote rule: over the head; a plate there: beside it, the side nearer the middle; a plate there too:
+  //      picture — both by the emote rule: over the head; a badge there (round 24 plates; a name plate before): beside it, the side nearer
+  //      the middle; a badge there too:
   //      4 px further and lower; else dropped. loud: the cream bubble with a red '!' or a blue '?' (a 1-px ring in the wanted piece's
-  //      rarity colour, a gold one while it is the ◀ ▶ walk's), always over the head (they pop only at the corner's wall end: no plate
+  //      rarity colour, a gold one while it is the ◀ ▶ walk's), always over the head (they pop only at the corner's wall end: no badge
   //      there). em: { ch, t, style, icon, ring (a palette name), lit, bob (px up), fade (0..1) }
   function emote(RM, em, hx, top) {
     const st = em.style || 'quiet';
@@ -16280,10 +16305,10 @@ const CAST = (() => {
     const ch = em.ch || '', t = em.t || 0, f = typeof FONT_M !== 'undefined' ? FONT_M : null, chat = st === 'chat';
     const w = chat ? 11 : textW(ch, f), hh = chat ? 13 : 9, bob = chat ? 0 : round(min(3, t * 12));
     let gx = round(hx), gy = top - (chat ? 14 : 10) - bob;
-    const hit = (x, y) => onPlate(RM, x - (w >> 1) - 1, y - 1, x + (w >> 1) + 1, y + hh - 1);
-    if (hit(gx, gy)) {   // (a plate there: beside his head, the side nearer the middle)
+    const hit = (x, y) => onBadge(RM, x - (w >> 1) - 1, y - 1, x + (w >> 1) + 1, y + hh - 1);
+    if (hit(gx, gy)) {   // (a badge there: beside the head, the side nearer the middle)
       const side = gx < W / 2 ? 1 : -1; gx += side * (chat ? 12 : 10); gy = top - 2 - bob;
-      if (hit(gx, gy)) {   // (a plate right over his head — the DISPLAY SHELF's at home: beside his face, 14 px out, 6 px under his frame's top)
+      if (hit(gx, gy)) {   // (a badge right over the head: beside the face, 14 px out, 6 px under the frame's top)
         gx += side * 4; gy = top + 6 - bob;
         if (hit(gx, gy)) return;
       }
@@ -16411,7 +16436,7 @@ const CAST = (() => {
   /** ROUND 23: ONE FRAME OF A CAST INTO A RECT (SETTINGS' PLAY AS row: src/72_owner.js keeperDraw) — made as the room makes it: the
    *  shrink at its own size (k = 1 / res: a spot frame on the 1x grid of its spot; a generic one at the bake point), the cast's
    *  default look with your paint spots, light scale 1, the pieces' 1-px BOT outline. The head's middle (its top three rows) centred
-   *  across, its top row 2 px under y; clipped to the rect. No depth, no plates, no RM.own, no 2x text layer. One entry per cast and
+   *  across, its top row 2 px under y; clipped to the rect. No depth, no badges, no RM.own, no 2x text layer. One entry per cast and
    *  frame, kept (CAST.reset drops them); re-coloured only when the paint spots change. true when drawn */
   const PORT = {};
   function portrait(id, frame, x, y, w, h) {
@@ -16461,7 +16486,7 @@ const CAST = (() => {
    - LOADED WHEN NEEDED: the page holds each cast's manifest and its idle_0 (the portrait and the art check); its other frames
      are its file (themes/cast_m.js, themes/cast_f.js), fetched only for the cast you play as (CAST.need) — from the title
      screen on. Until it is in he is ABSENT (his life waits; every hook falls through to the room exactly as without him), then
-     he dissolves in at home (0.4 s; the DISPLAY SHELF plate moves up over his head as he does) — in a visit begun from the title,
+     he dissolves in at home (0.4 s) — in a visit begun from the title,
      with the greeting he would have given at the door. A switch keeps the one drawn until the new one is in and nothing is over
      the room, then cross-dissolves (the same pose, his life goes on). A failed fetch (a 404, offline) is no error: tried again, he
      stays absent.
@@ -16471,9 +16496,8 @@ const CAST = (() => {
      becomes the shopkeeper). A second tap on the station, Enter, Space or a tap on him skips the walk; another station turns him there;
      THE MENU, SETTINGS, the room themes, the rating or the level banner drop the zoom (he still arrives). His own errands
      never cost you time. The walk takes every tap: no input lock.
-   - HOME is centred behind the counter (Alex, after the preview: "he should be centered behind the counter"), (8, -4): the
-     DISPLAY SHELF's plate then hangs on the case's lowest shelf right over his head (hook 6, tagAt) while no piece of yours
-     stands there.
+   - HOME is centred behind the counter (Alex, after the preview: "he should be centered behind the counter"), (8, -4). (Rounds
+     22-24 hung the DISPLAY SHELF's name plate over his head there — hook 6, tagAt; round 24 plates took the name plates out of the room.)
    - THE RETURN: the pull-out finds him at the station you left, finishing what you did there (the bench: his brush a moment
      longer, then the visor flipped up; the shelf's piece arranged …); ONE mood about what happened plays right there, turned to
      you (a level, a Legendary, a perfect sale, a sale, two noes — an upgrade: he walks over to admire it, a finished piece: his
@@ -16499,10 +16523,11 @@ const CAST = (() => {
      home with it). Someone WAITS for you only while a "!" or
      "?" is up (waiting()): browsers wait for nobody, so his lingers and errands and settles go on. His floor lost the floor behind
      the tea bar (and the tea spot, the corner J); while a customer is on the customers' floor he keeps out of x < -125, z > -60.
-     The WORKBENCH plate (up at (80, 57)) moves 12 px left while he stands at the bench (hook 6). He reads LIFE's cues (LIFE.cues,
+     He reads LIFE's cues (LIFE.cues,
      LIFE.chatting, LIFE.onFloor) and the room's events (RM.ev); without LIFE, SHOP's events alone.
    The design: the round-22 DESIGN.md §3.4 (this API, the hooks in src/63_room.js: five, and a sixth since Alex's centred home —
-   the DISPLAY SHELF plate's place, tagAt; round 23: four more in src/68_admin.js, 7-10, SETTINGS' PLAY AS row), §4 (navigation: three walkable floor rects, the spots, the corner waypoints K and J,
+   the DISPLAY SHELF plate's place, tagAt: ROUND 24 PLATES RETIRED IT with the name plates (Alex: "you can remove the names"), hooks 1-5
+   and 7-10 keep their numbers; round 23: four more in src/68_admin.js, 7-10, SETTINGS' PLAY AS row), §4 (navigation: three walkable floor rects, the spots, the corner waypoints K and J,
    shortest paths), §5 (behaviour), §6 (sound: soft oak footsteps on the footfall frames, a few blips in the cast's own voice:
    shop_m, shop_f), §7 (revert); round 23: the keeper DESIGN (the two casts, the choice, the loading).
    The pixels: CAST (src/73_cast.js) from the casts' baked frames (ART.cast.m, ART.cast.f: src/26_castdata.js, src/27_castdata_f.js
@@ -16518,7 +16543,7 @@ const CAST = (() => {
    &ownersize=<x> &ownerlook=<name> (a cast's manifest looks: dark for 'f', design for 'm'; kraft either) &ownerlog=1
    &ownerlegs=0 (his own walks straight, as dirOf picks: to compare) &ownerlinger=<s> (the linger's quiet time fixed at s, then
    home: tests, A/B) (&ownerbox=1: a box where the art or the renderer is missing) (&castload=fail|<s>: src/73_cast.js).
-   Exposes OWNER = { on, enter, update, walk, draw, tap, tagAt, st, pos, waiting, keeperRow, keeperDraw, keeperTap } and DEV.owner.
+   Exposes OWNER = { on, enter, update, walk, draw, tap, st, pos, waiting, keeperRow, keeperDraw, keeperTap } and DEV.owner.
    ============================================================================= */
 const OWNER = (() => {
   'use strict';
@@ -17556,8 +17581,8 @@ const OWNER = (() => {
     return n;
   }
 
-  // ---- hook 4: drawn after the name plates (CAST: the back plates under him, the counter's pieces and the COUNTER and
-  //      NOTEBOOK plates over him), before the room's particles and the zoom (he zooms with the room and dissolves under it)
+  // ---- hook 4: drawn into the room (CAST: the counter's pieces over him; round 24 plates: no name plates — the room's badges are drawn
+  //      over him after), before the room's particles and the zoom (he zooms with the room and dissolves under it)
   const DEC = { blink: false, eyesShut: false, mouthOpen: false, glint: false }, EMO_O = { ch: '', t: 0 }, BOXA = [0, 0, -1, -1];   // (reused every draw: §3.9, nothing allocated a frame)
   const DO = { frame: '', flip: false, x: 0, z: 0, spot: null, look: null, fade: 1, sid: 0, decal: DEC, lamp: false, shadow: true, size: 1, emote: null, out: false };
   function draw() {
@@ -17589,12 +17614,12 @@ const OWNER = (() => {
    *  compare (&ownerlook=<name>: the manifest's looks, or kraft, TTA's apron) */
   const LOOKS = { kraft: { 2: 'CRK' } };
   const lookFor = (k) => { if (!LOOKN) return null; const M = manOf(k); return (M && M.looks && M.looks[LOOKN]) || LOOKS[LOOKN] || null; };
-  /** ♪ ♥ ★ ! over his head (glyphs, never particles: those use FXR), clear of the name plates */
+  /** ♪ ♥ ★ ! over his head (glyphs, never particles: those use FXR), clear of the room's badges (round 24 plates; the name plates before) */
   function drawEmote(R) {
     const E = S.emote, b = S.box; if (!E || !b || R.RM.zoom) return;
     const age = (S.n - E.n0) * TICK; if (age > E.dur) { S.emote = null; return; }
     const cx = Math.round((b[0] + b[2]) / 2); let y = b[1] - 9 - Math.min(3, Math.floor(age * 5));
-    for (const s of R.RM.st || []) { const t = s.tagR; if (t && cx + 4 >= t[0] && cx - 4 < t[0] + t[2] && y + 8 >= t[1] && y < t[1] + t[3]) y = t[1] - 10; }
+    for (const s of R.RM.st || []) { const t = s.badgeR; if (t && cx + 4 >= t[0] && cx - 4 < t[0] + t[2] && y + 8 >= t[1] && y < t[1] + t[3]) y = t[1] - 10; }
     if (y < 18) return;
     textO(E.ch, cx, y, E.ch === '♥' ? C.PNK2 : E.ch === '♪' ? C.CRM2 : E.ch === '!' ? C.Y7 : C.Y6, C.UI0, FONT_M, 1, 1);
   }
@@ -17667,29 +17692,7 @@ const OWNER = (() => {
   }
   const safe = (fn, dflt) => (...a) => { if (S.dead) return dflt; try { return fn(...a); } catch (e) { die(e); return dflt; } };
   const safe0 = (fn) => () => { if (S.dead) return; try { fn(); } catch (e) { die(e); } };   // (every tick, every frame: no rest array)
-  const safeTag = (s) => { if (S.dead) return null; try { return tagAt(s); } catch (e) { die(e); return null; } };   // (each plate, every frame)
-
-  // ---- hook 6: where a station's name plate sits while he is on (src/63_room.js tag(); null: its own place). Centred at home he
-  //      stands right in front of the DISPLAY SHELF's plate (his chest over "DISPLAY SHELF", and its rect would take the taps on him
-  //      from the COUNTER), so it hangs on the case's lowest shelf right over his head — a sign over the shopkeeper: [163, 63], its
-  //      border rows 61-70, his hair at row 71. That shelf fills last (the 11th piece you keep, the top shelf first): while no piece
-  //      there touches the plate; else its own place (behind him, late game)
-  const PLATE_UP = [163, 63], PLATE_C = { key: -1, at: null };
-  /** ROUND 24 (DESIGN_SHOP_LIFE §3.8): the WORKBENCH plate sits up on the window's foot (80, 57), clear of every customer — and while
-   *  he stands at the bench spot his hair (row 61) covers its last letters: 12 px left, (68, 57), until he leaves the spot */
-  const BENCH_PLATE = [68, 57];
-  function tagAt(s) {
-    if (s && s.key === 'bench') { if (!live()) return null; const b = SP().bench; return b && Math.hypot(S.rx - b[0], S.rz - b[1]) < 24 ? BENCH_PLATE : null; }
-    if (!s || s.key !== 'cabinet' || !live()) return null;   // (round 23, absent — his cast's file on its way, or failed —: its own place, the room exactly as without him; it moves up as he dissolves in)
-    const R = room(), G_ = GS(); if (!R || !G_) return null;
-    const n = Math.min(15, (G_.kept || []).length), w = textW(T(s.name), FONT_S) + 6, key = n * 4096 + w;   // (the room draws kept.slice(0, 15): the pieces that show)
-    if (PLATE_C.key === key) return PLATE_C.at;   // (the same pieces, the same plate: measured once, not every frame)
-    const x0 = PLATE_UP[0] - (w >> 1) - 1, x1 = x0 + w + 1, y0 = PLATE_UP[1] - 2, y1 = PLATE_UP[1] + 7, CA = R.AN.case;   // (its border rect, as tag() draws it)
-    let at = PLATE_UP;
-    for (let k = 10; k < n; k++) { const [x, y] = R.PROJ(CA.x + CA.slots[k % 5], CA.shelves[0], CA.z); if (x + 7.5 >= x0 && x - 7.5 <= x1 && y >= y0 && y - 19 <= y1) { at = null; break; } }   // (a lowest-shelf piece's 15 x 19 box)
-    PLATE_C.key = key; PLATE_C.at = at; return at;
-  }
-  return { on: () => on(), enter: safe(enter), update: safe0(update), walk: safe(walk, false), draw: safe0(draw), tap: safe(tap), tagAt: safeTag, st,
+  return { on: () => on(), enter: safe(enter), update: safe0(update), walk: safe(walk, false), draw: safe0(draw), tap: safe(tap), st,
     pos: () => (live() && (S.drawn || !drawable()) ? [S.rx, S.rz] : null), waiting,   // (round 24: where LIFE sorts him among the customers; a "!" or "?" up)
     keeperRow: safe(keeperRow, 0), keeperDraw: safe(keeperDraw), keeperTap: safe(keeperTap, false),
     _S: S, _route: route, _clampFloor: clampFloor, _unproject: unproject, _covers: safe(covers, 0), _dirOf: (h, x, z) => dirOf(h, x, z).slice(), _anim: anim };
@@ -20380,7 +20383,8 @@ I18N.add('de', {
   'Open or close the shop': 'Öffne oder schließe den Laden',
   'The mixing table opens at level {lvl}': 'Den Mischtisch gibt es ab Level {lvl}',
   'The notebook opens at level {lvl}': 'Das Notebook gibt es ab Level {lvl}',
-  // the name plates on the furniture
+  // the name plates on the furniture (round 24 plates: gone from the room — English no longer draws these two; kept, as German is parked:
+  // "dont erase what has already been translated". The station names stay in use: the bottom bar says them)
   '{name} · LV {lvl}': '{name} · LV {lvl}',
   '{name} · {count} TO SEND': '{name} · {count} ZUM VERSAND',
   // the bands: the title, the shop's state, admin mode. CLOSED is ZU: the same key is the neon sign in the window, 28 px wide
