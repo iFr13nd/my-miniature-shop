@@ -9028,13 +9028,26 @@ const TRAY = (() => {
      When a theme's windows are wide enough (x1.35 Tom's), its figures can be painted automatically at about your own recorded
      skill (no painting XP: it saves you the work; the sale still counts) — never one of your two newest themes: those need your
      hands.
+   ROUND 25, SELLING WHILE AWAY and REAL-TIME BUILDS (2026-10-22, the owner's two asks in one release: the shop sells while the game
+     is closed, the bigger upgrades take real time to build; DESIGN_SHOP_LIFE Appendix D): while the game is closed (or on the title)
+     the shopkeeper minds the shop — with the sign OPEN and something on the counter, ORDINARY customers (no "!", no "?") come at
+     AWAY_PACE x the live pace for the first AWAY_CAP_H hours of an absence and buy through the live till (awayRun: QUIET — no event,
+     no save of its own; catchUp saves once); what happened is the tally G.S.away, the room's WHILE YOU WERE AWAY card and the title's
+     money line. A capped track's level takes real time to build, one at a time, on the wall clock (G.S.build: BUILD_T; buyTrack starts
+     it, settleBuilds ends it — inside an absence at its end); the level is recorded at the purchase (G.S.up) and in effect at the end
+     (up()), its REVEAL then (G.S.reveal). The endless tracks stay instant; admin mode builds nothing. The three numbers are
+     tools/econ_sweep.mjs's (the play patterns: README "Selling while away and real-time builds").
    Exposes SHOP (see the return at the end). Needs TRAY (src/65_tray.js: the mixed colours) loaded before it.
    ============================================================================= */
 const SHOP = (() => {
   'use strict';
   const D = FIGDEF;
   const lvl = () => Math.max(1, (G.S && G.S.lvl) | 0);
-  const up = (id) => (G.S && G.S.up && G.S.up[id]) | 0;
+  /** a track's level IN EFFECT. ROUND 25 (REAL-TIME BUILDS, B10): while a capped track's build runs (G.S.build, below) its bought
+   *  level is already recorded in G.S.up (a save loaded in older code has it, bought) and counts one less here until the build is
+   *  done (settleBuilds). Every read of a level goes through this (SHOP.up, DRESS's up): read G.S.up itself only to save or to
+   *  repair it */
+  const up = (id) => { const S = G.S; if (!S || !S.up) return 0; const L = S.up[id] | 0, b = S.build; return b && b.id === id ? Math.max(0, Math.min(L, (b.L | 0) - 1)) : L; };
   const HUES = ['R', 'Y', 'B', 'O', 'G', 'V', 'W', 'K'];
   const PLAQUES = [{ name: N_('FRIEND'), k: 0.8 }, { name: N_('FAIR'), k: 1.0 }, { name: N_('DEAR'), k: 1.25 }, { name: N_('STEEP'), k: 1.5 }];   // (names: English keys, the draw site translates)
   const tierOf = (sid) => D.seriesById(sid).tier;
@@ -9111,7 +9124,7 @@ const SHOP = (() => {
     { id: 'brush', name: N_('FINE BRUSHES'), c1: fineC1(150), g: FINE_G, max: Infinity, lv: 1, fx: (L, p = 0) => TF('FINER WORK: TAGS x{mult} · MASTERWORK FROM {pct}%', { mult: fmtDec(brushK(L), 2 + p), pct: p ? fmtDec(masterQ(L) * 100, p) : Math.round(masterQ(L) * 100) }), sh: (L) => TF('TAGS x{mult}', { mult: fmtDec(brushK(L), 2) }) },
     { id: 'lamp', name: N_('DESK LAMP'), c1: 120, g: 1.35, max: Infinity, lv: 2, fx: (L, p = 0) => TF('TIMING WINDOWS x{mult} · AUTO PAINT FROM x{auto} (OLDER THEMES)', { mult: fmtDec(lampK(L), 2 + p), auto: fmtDec(AUTO_AT, 2) }), sh: (L) => TF('TIMING x{mult}', { mult: fmtDec(lampK(L), 2) }) },
     { id: 'supplier', name: N_('SUPPLIER'), c1: 250, g: 2.0, max: 5, lv: 3, fx: (L, p = 0) => { const o = packOdds(L); return TF('PACKS: UNCOMMON {unc} · RARE {rare} · EPIC {epic}', { unc: pct(o[1], p), rare: pct(o[2], p), epic: pct(o[3], p) }); }, sh: (L) => TF('RARE {pct}', { pct: pct(packOdds(L)[2]) }) },
-    { id: 'board', name: N_('PATRONS'), c1: 300, g: 2.0, max: 5, lv: 4, fx: (L) => TF('A REQUEST EVERY {mins} MIN · {count} ON THE BOARD', { mins: Math.round(commEvery(L) / 60), count: commSlots(L) }), sh: (L) => TF('EVERY {mins} MIN', { mins: Math.round(commEvery(L) / 60) }) },   // (round 24: the patron brings the letter in person, "?")
+    { id: 'board', name: N_('PATRONS'), pl: true, c1: 300, g: 2.0, max: 5, lv: 4, fx: (L) => TF('A REQUEST EVERY {mins} MIN · {count} ON THE BOARD', { mins: Math.round(commEvery(L) / 60), count: commSlots(L) }), sh: (L) => TF('EVERY {mins} MIN', { mins: Math.round(commEvery(L) / 60) }) },   // (round 24: the patron brings the letter in person, "?")
     { id: 'window', name: N_('SHOP WINDOW'), c1: 280, g: 1.9, max: 6, lv: 5, fx: (L, p = 0) => { const o = custOdds(L); return TF('RARER CUSTOMERS: UNCOMMON {unc} · RARE {rare} · EPIC {epic}', { unc: pct(o[1], p), rare: pct(o[2], p), epic: pct(o[3], p) }); }, sh: (L) => TF('RARE+ {pct}', { pct: pct(custOdds(L)[2] + custOdds(L)[3]) }) },
     // ROUND 24: the TEA CORNER's track (id, levels, prices: saves keep it) is the EXPLORATION CORNER — the find chance and the tips
     // (Alex: "a percentage, that can be improved via upgrades"). short: the strip's name when the full one does not fit
@@ -9121,7 +9134,7 @@ const SHOP = (() => {
     { id: 'web', name: N_('WEBSHOP'), c1: 300, g: 2.0, max: 5, lv: 5, fx: (L) => TF('{count} AUCTIONS AT ONCE ON THE NOTEBOOK', { count: listSlots(L) }), sh: (L) => TF('{count} AUCTIONS', { count: listSlots(L) }) },
     // M4 (Alex: "better mixing tables > more/new colors able to mix"): a bigger tray = more room to climb (Pearl, Starlight, a
     // recipe's two Pearls side by side), more drops in a mix = more pots a session
-    { id: 'table', name: N_('MIXING TRAYS'), c1: 260, g: 2.4, max: 5, lv: 4, fx: (L) => TF('A {cols}x{rows} TRAY · {count} DROPS A MIX', { cols: tableAt(L).cols, rows: tableAt(L).rows, count: tableAt(L).drops }), sh: (L) => TF('TRAY {cols}x{rows}', { cols: tableAt(L).cols, rows: tableAt(L).rows }) },
+    { id: 'table', name: N_('MIXING TRAYS'), pl: true, c1: 260, g: 2.4, max: 5, lv: 4, fx: (L) => TF('A {cols}x{rows} TRAY · {count} DROPS A MIX', { cols: tableAt(L).cols, rows: tableAt(L).rows, count: tableAt(L).drops }), sh: (L) => TF('TRAY {cols}x{rows}', { cols: tableAt(L).cols, rows: tableAt(L).rows }) },
   ];
   const pct = (x, p = 0) => (p ? fmtDec(x * 100, p) : Math.round(x * 100)) + '%';   // (p: decimals more — fxLine)
   /** a share in whole points, or with its one decimal when it has one (the find chance: 82.5%, 85%) */
@@ -9364,10 +9377,71 @@ const SHOP = (() => {
   const FXM = {};   // (its skeptic: per endless track, its lines and their decimals, level by level)
   const fxNums = (s) => (String(s).match(/\d+(?:[.,]\d+)?/g) || []).map((v) => +v.replace(',', '.'));   // (the numbers in a line)
   const fxWords = (s) => String(s).replace(/\d+(?:[.,]\d+)?/g, '#');   // (and its words round them)
-  function buyTrack(id) {
-    const c = trackCost(id); if (!trackOpen(id) || !(G.S.money >= c)) return false;
-    G.addMoney(-c, 'upgrade'); G.S.up[id] = up(id) + 1; return true;
+  /** buy the next level of track id (now: the wall clock, ms) → true if bought (a track a build blocks is not: buyBlock). ROUND 25
+   *  (REAL-TIME BUILDS, B1, B2): the coins go at once and the level is recorded at once (G.S.up); a capped track's level then takes
+   *  buildMs to build (G.S.build: it counts from its end on — up()), an endless track's is there at once */
+  function buyTrack(id, now = Date.now()) {
+    const c = trackCost(id); if (!trackOpen(id) || !(G.S.money >= c) || buyBlock(id)) return false;
+    G.addMoney(-c, 'upgrade'); const L = (G.S.up[id] = up(id) + 1), ms = buildMs(id, L);
+    if (ms > 0) G.S.build = { id, L, t0: now, end: now + ms, dur: ms };
+    return true;
   }
+  // ================================================================== ROUND 25: REAL-TIME BUILDS (the setup — the record, the numbers, the
+  // API; the BUILD lane makes buyTrack start a build and settleBuilds finish it). A capped track's level (the nine TRACKS with a last
+  // level: counter, sign, supplier, board, window, tea, lights, web, table) takes real time to build — on the wall clock, also while the
+  // game is closed, as the auctions; the endless ones (brush, lamp, shelves) stay instant. ONE build at a time across the capped tracks.
+  // G.S.build = null | { id, L: the level being built (already in G.S.up: up() counts one less), t0, end, dur: wall-clock ms };
+  // G.S.reveal = [{ id, L }]: finished builds whose REVEAL is still to show (the room shows them, oldest first)
+  /** a capped track's first level BUILD_T.min s to build, its last BUILD_T.max s, geometric between (B3). Tuned by tools/econ_sweep.mjs
+   *  on the play patterns (round 25's integration; README "Selling while away and real-time builds"): 30 s … 30 min (~8 h for all 54
+   *  levels) keeps every pattern's levels 10, 20 and 50 within ±10% of the 240-h curve with the fewest play minutes blocked (0.1-0.7
+   *  a play hour); 1 … 60 min blocked a 3-h player 3.5 min a play hour and 45 s … 45 min put his level 20 13% late */
+  const BUILD_T = { min: 30, max: 1800 };
+  const REVEAL_MAX = 4;   // (finished builds waiting for their REVEAL: one build at a time, so seldom more than one)
+  const capped = (id) => { const t = trackOf(id); return !!t && isFinite(t.max); };
+  /** ms that level L of track id takes to build: 0 (instant) for an endless track, and in admin mode */
+  function buildMs(id, L) {
+    const t = trackOf(id); if (!t || !isFinite(t.max) || (G.S && G.S.admin)) return 0;
+    const k = t.max > 1 ? (Math.max(1, Math.min(t.max, L | 0)) - 1) / (t.max - 1) : 1;
+    return Math.round(1000 * BUILD_T.min * Math.pow(BUILD_T.max / BUILD_T.min, k));
+  }
+  /** the build under way (G.S.build), or null */
+  const building = () => (G.S && G.S.build) || null;
+  /** what a build blocks for track id: '' nothing, 'build' (id itself is being built), 'busy' (another capped track is: one at a time,
+   *  B4); an endless track is never blocked */
+  function buyBlock(id) { const b = building(); if (!b || !capped(id)) return ''; return b.id === id ? 'build' : 'busy'; }
+  /** ms left of the build under way at wall-clock now (0: none, or done) */
+  const buildLeft = (now = Date.now()) => { const b = building(); return b ? Math.max(0, b.end - now) : 0; };
+  const NO_BUILDS = Object.freeze([]);
+  /** the build done by wall-clock now (ms): its level in effect from now on (G.S.build cleared), its REVEAL waiting (pushed on
+   *  G.S.reveal, the last REVEAL_MAX kept); a build whose end lies more than its dur ahead is clamped to now + dur (a backward clock
+   *  jump, B9: never longer than its length; a forward one finishes it early) → [{ id, L }] the builds finished now (none: a frozen
+   *  []). The room and every station call it each frame, catchUp on a return, awayRun at a build's end inside an absence (a now in
+   *  the past). It does not save: the room or the board that shows its REVEAL saves when it closes; catchUp saves */
+  function settleBuilds(now) {
+    const S = G.S, b = S && S.build; if (!b) return NO_BUILDS;
+    if (b.end > now + b.dur) { b.end = now + b.dur; b.t0 = now; }
+    if (!(b.end <= now)) return NO_BUILDS;
+    S.build = null; if (!Array.isArray(S.reveal)) S.reveal = [];
+    S.reveal.push({ id: b.id, L: b.L }); if (S.reveal.length > REVEAL_MAX) S.reveal.splice(0, S.reveal.length - REVEAL_MAX);
+    return [{ id: b.id, L: b.L }];
+  }
+  /** the build under way done at once (wall-clock now), settled as settleBuilds does; quiet: no REVEAL waits for it (a test, the
+   *  sim) → true if there was one */
+  function finishBuild(now = Date.now(), quiet = false) {
+    const b = building(); if (!b) return false;
+    b.end = Math.min(b.end, now); const done = settleBuilds(now);
+    if (quiet && done.length) { const R = G.S.reveal, k = R.length - 1; if (k >= 0 && R[k].id === b.id && R[k].L === b.L) R.pop(); }
+    return done.length > 0;
+  }
+  /** the first finished build whose REVEAL is still to show ({ id, L }), or null — revealDone(): it has been shown (the caller saves) */
+  const revealNext = () => (G.S && Array.isArray(G.S.reveal) && G.S.reveal[0]) || null;
+  function revealDone() { const S = G.S; if (S && Array.isArray(S.reveal) && S.reveal.length) S.reveal.shift(); }
+  /** (ensure) a sane build record in save S: a capped track, its level the one G.S.up records, its clock numbers (dur no longer than
+   *  4x BUILD_T.max: what this or a retuned version writes), not in admin mode */
+  const buildOK = (S) => { const b = S.build; if (!b || typeof b !== 'object' || Array.isArray(b) || !capped(b.id)) return false; const t = trackOf(b.id);
+    return Number.isInteger(b.L) && b.L >= 1 && b.L <= t.max && (S.up[b.id] | 0) === b.L && Number.isFinite(b.t0) && Number.isFinite(b.end) && Number.isFinite(b.dur) && b.dur > 0 && b.dur <= 4000 * BUILD_T.max && !S.admin; };   // (dur: at most 4x the longest build — a broken save's 1e15 would block every capped track for good)
+  const revealOK = (r) => !!r && typeof r === 'object' && capped(r.id) && Number.isInteger(r.L) && r.L >= 1;
 
   // ================================================================== AUTO PAINT: tighter windows on newer themes, the lamp widens them
   /** how wide a theme's timing windows are, before the lamp (x0.985 a tier: theme 10 x0.87, 25 x0.70, 50 x0.48) */
@@ -9847,6 +9921,12 @@ const SHOP = (() => {
     stampAll();
     if (S.q.some((c) => !LIFE_K[c.k])) migrateQueue();   // (round 23's queue: up to 3 of them browse on, the rest go home)
     for (const c of S.q) if (c && c.look) unlike(c.look, c.bust);   // (her bob blonde since 2026-10-20: a save from before can hold customers the copper-keyed guard let through, her blonde in a blue coat — the guard again, in place; nothing for a record it made)
+    // ROUND 25 (the setup): the build under way, the away tally, the REVEALs waiting — an older save has none (null, null, []). A
+    // malformed one is dropped, never a reason to refuse the save (a refused save starts a new game); so is a build whose level is not
+    // the one G.S.up records (admin mode raised it, a debug &up=, older code bought on) and any build in admin mode: its level stays bought
+    if (S.build === undefined || (S.build !== null && !buildOK(S))) S.build = null;
+    if (S.away === undefined || (S.away !== null && (typeof S.away !== 'object' || Array.isArray(S.away)))) S.away = null;
+    if (!Array.isArray(S.reveal)) S.reveal = []; else if (S.reveal.length && !S.reveal.every(revealOK)) S.reveal = S.reveal.filter(revealOK).slice(-REVEAL_MAX);
     // admin mode: everything this version has stays unlocked, after the updates above (src/68_admin.js; loads after this file)
     if (S.admin && typeof ADMIN !== 'undefined') ADMIN.unlock();
   }
@@ -9978,12 +10058,15 @@ const SHOP = (() => {
   /** a stable 0..1 for seed s and slot k (SHOP's own slots are 1-9; LIFE may take any other): no draw on RNG */
   const hf = (s, k) => { let t = ((s | 0) ^ Math.imul((k | 0) + 1, 0x9E3779B1)) >>> 0; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   const newSeed = (rnd) => 1 + Math.floor(rnd() * 2147483646);
-  const save = () => { if (typeof G.save === 'function') G.save(); };
+  /** ROUND 25, QUIET (the AWAY lane): set while the shop is minded away (awayRun) — save() saves nothing and emit() hands its event
+   *  back without queueing it: nobody saw those visits (no till, no note, no banner in the room); catchUp saves once afterwards */
+  let QUIET = 0;
+  const save = () => { if (!QUIET && typeof G.save === 'function') G.save(); };
   const figOf = (p) => (p ? D.FIGS[D.byId[p.fig]] : null);
   const rarOf = (p) => { const f = figOf(p); return f ? f.rar : -1; };
   // ---- the events (SHOP.events(): drained by ONE caller a tick)
   const EV = []; let evN = 0;
-  function emit(type, cid, o) { const e = Object.assign({ type, cid, n: ++evN, at: (G.S && G.S.shopT) || 0 }, o); EV.push(e); if (EV.length > 256) EV.splice(0, EV.length - 256); return e; }
+  function emit(type, cid, o) { const e = Object.assign({ type, cid, n: ++evN, at: (G.S && G.S.shopT) || 0 }, o); if (QUIET) return e; EV.push(e); if (EV.length > 256) EV.splice(0, EV.length - 256); return e; }   // (QUIET: the event is the caller's alone — awayRun reads it)
   const events = () => EV.splice(0, EV.length);
   const NEW = [], NEWC = [];   // customers / letters by post that came in since the game last asked (round 23's arrivals() / commArrivals())
   // ---- the pieces' numbers: every piece that can be sold or held has a pid (G.S.pidN counts)
@@ -10294,7 +10377,9 @@ const SHOP = (() => {
     });
     outs.sort((p, q) => p.W - p.t - (q.W - q.t)).forEach((cu) => { cu.W = bookOut(cu, cu.W); });
   }
-  /** the time away (s): up to CAP browsers mid-visit (BRISK: 2) — none at a bare counter; no sale, no peek, no "!" or "?" (no idle income) */
+  /** the time away (s): up to CAP browsers mid-visit (BRISK: 2) — none at a bare counter; no sale, no peek, no "!" or "?" here. (ROUND 25:
+   *  the idle income is awayRun's — the ordinary customers who came and bought while you were away; these are the ones still looking
+   *  round as you come back, placed after it) */
   function fillAway(away, rnd = () => RNG.f()) {
     const S = G.S; if (!S || !S.open || !onShow().length) return 0;
     const g = arriveEvery() / drawK(), n = Math.min((waiterIn() ? CAP_WAIT : BRISK ? 2 : CAP) - S.q.length, Math.floor(away / g));
@@ -10302,11 +10387,99 @@ const SHOP = (() => {
     const recs = []; for (let i = 0; i < n; i++) recs.push(makeVisitor('browse', rnd, newSeed(rnd)));
     place(recs); return n;
   }
-  /** after a reload or a return from the background: the time away brings browsers (fillAway; never a letter) */
-  function catchUp() {
+  // ================================================================== ROUND 25: SELLING WHILE AWAY (the setup — the numbers, the tally, the
+  // API; the AWAY lane fills awayRun). While the game is closed (or on the title) the shopkeeper minds the shop: with the sign OPEN and
+  // something on the counter, ORDINARY customers (no "!", no "?") come at AWAY_PACE x the live pace and buy as they do in an open shop
+  // (decide: their price, the tip, the COINS and XP boosts, the review). G.S.away = null | the tally since it was last seen (the room's
+  // WHILE YOU WERE AWAY card): { v: 1, n: absences, secs: their seconds that counted, arrivals, sold, coins, xp, stars: [the buyers'
+  // reviews], pieces: [the first ones sold, as they were], ups: [levels reached], built: [{ id, L }], parcels }
+  /** away arrivals at this share of the live ordinary pace; at most this many hours of an absence count. Tuned by tools/econ_sweep.mjs on
+   *  the play patterns (round 25's integration; README "Selling while away and real-time builds"): 0.15 for the first hour keeps every
+   *  pattern's levels 10, 20 and 50 within ±10% of the 240-h curve; no longer cap tried did (the provisional 0.5 for 8 h put the
+   *  3 x 15-min player's level 10 16% early, a 2-h cap 8-19%: every one of his absences is longer than 2 h) */
+  const AWAY_PACE = 0.15, AWAY_CAP_H = 1;
+  /** the tally's lists: the buyers' reviews (the last AWAY_STARS), the pieces sold (the first AWAY_PIECES: the card's pictures) */
+  const AWAY_STARS = 12, AWAY_PIECES = 8;
+  /** AWAY lane — the shop minded from wall-clock ms `from` to `to` (an absence): its first AWAY_CAP_H h sell (a build that ends inside
+   *  it is settled at its end, settleBuilds: its level counts from then on), the auctions that ended by `to` become parcels
+   *  (marketTick), each added to G.S.away → how many things happened (pieces sold + builds finished + auctions sold; 0: nothing — no
+   *  card, the tally untouched). QUIET throughout: no event, no save (catchUp saves once). Customers inside stay where they were (G.S.q,
+   *  the lane, the door's and the letters' clocks untouched); no letter, no "!", no "?" */
+  let LAST = null;   // (the last run's own doings, whatever happened — awayLast(): the tests, the sim)
+  let AWAY_SOLD = [];   // (the auctions away runs sold, not yet announced — awaySold())
+  function awayRun(from, to, rnd = () => RNG.f()) {
+    const S = G.S; if (!S || !(to > from)) return 0;
+    const cut = Math.min(to, from + AWAY_CAP_H * 3600e3), R = LAST = { from, to, cut, secs: 0, arrivals: 0, sold: 0, coins: 0, xp: 0, stars: [], pieces: [], ups: [], built: [], parcels: 0, segs: [] };
+    const done = (list) => { for (const x of list || []) R.built.push({ id: x.id, L: x.L }); };   // (its REVEAL is queued by settleBuilds)
+    QUIET++;
+    try {
+      done(settleBuilds(from));   // (a build already done as the absence began — THE MENU was up as it ended, no settle — counts from its start)
+      const b = building(), split = b && b.end > from && b.end <= cut ? b.end : null;
+      R.secs = (cut - from) / 1000;
+      if (split === null) awayMind(from, cut, rnd, R);
+      else { const on = awayMind(from, split, rnd, R); done(settleBuilds(split)); if (on) awayMind(split, cut, rnd, R); }   // (A2: CLOSED or bare in the first stretch — no second)
+      done(settleBuilds(to));   // (one that ended after the cap, still while you were away)
+      const sold = marketTick(to, rnd); R.parcels = sold.length;   // (A7: the auctions that sold — the money comes at the packing table, as ever)
+      AWAY_SOLD = AWAY_SOLD.filter((o) => Array.isArray(S.orders) && S.orders.includes(o)).concat(sold);   // (their gavel and note wait for whoever shows them: awaySold)
+    } finally { QUIET--; }
+    const n = R.sold + R.built.length + R.parcels;
+    if (n) awayAdd(S, R);
+    return n;
+  }
+  /** the auctions away runs sold (QUIET: no gavel, no note then) that still wait at the notebook and nobody announced yet → the
+   *  orders, once: a station's gavel and note (as an auction ending there), the room's card as it opens (its gavel); after that [] */
+  function awaySold() { const S = G.S, o = AWAY_SOLD.filter((x) => S && Array.isArray(S.orders) && S.orders.includes(x)); AWAY_SOLD = []; return o; }
+  /** one stretch of an absence (wall ms t0 → t1, its seconds from 0): §3.3's door, in this order (the RNG draws are pinned) — the gap
+   *  (the live door's arriveEvery() x 0.5-1.5 on THE DRAW's clock, at AWAY_PACE), the sign and the counter (A2), the door's die (a "!"
+   *  that would have come: nobody), an ORDINARY customer (newCustomer's: a kid or an adult of any rarity, the curator while a Legendary
+   *  is on show; cid 0, never in G.S.q, never booked), the live till (decide, QUIET) → false once the sign is CLOSED or the counter
+   *  bare (the run stops for this absence) */
+  function awayMind(t0, t1, rnd, R) {
+    const S = G.S, secs = (t1 - t0) / 1000, sg = { t0, t1, arrivals: 0, sold: 0, nego: 0, stop: 'time', at: secs }; let t = 0; R.segs.push(sg);
+    for (let guard = 0; guard < 1e5; guard++) {
+      const gap = arriveEvery() * (0.5 + rnd()) / (drawK() * AWAY_PACE);
+      if (!(gap > 0) || !isFinite(gap)) { sg.stop = 'pace'; return true; }   // (a broken pace — a debug level — sells nothing, never loops)
+      t += gap; if (t > secs) return true;
+      if (!S.open || !onShow().length) { sg.stop = S.open ? 'bare' : 'closed'; sg.at = t; return false; }
+      const u = rnd();
+      if (u < P_NEGO && (S.kept || []).some((p) => rarOf(p) >= 2)) { sg.nego++; continue; }
+      const cu = makeVisitor('browse', rnd, newSeed(rnd), false), e = decide(cu, rnd);
+      R.arrivals++; sg.arrivals++;
+      if (e && e.type === 'sold') {
+        R.sold++; sg.sold++; R.coins += e.paid | 0; R.xp += e.xp | 0; R.stars.push(e.stars);
+        if (R.pieces.length < AWAY_PIECES && e.p) R.pieces.push(JSON.parse(JSON.stringify(e.p)));   // (as it was: the card's picture)
+        for (const L of e.ups || []) R.ups.push(L);
+      }
+    }
+    return true;
+  }
+  /** an absence's doings added to the tally (made on the first absence where something happened; an older or broken one's fields
+   *  repaired here, lazily: ensure() only drops a tally that is no object) */
+  function awayAdd(S, R) {
+    const a = S.away && typeof S.away === 'object' && !Array.isArray(S.away) ? S.away : (S.away = {});
+    a.v = 1;
+    for (const k of ['n', 'secs', 'arrivals', 'sold', 'coins', 'xp', 'parcels']) if (!Number.isFinite(a[k])) a[k] = 0;
+    for (const k of ['stars', 'pieces', 'ups', 'built']) if (!Array.isArray(a[k])) a[k] = [];
+    a.n += 1; a.secs += R.secs; a.arrivals += R.arrivals; a.sold += R.sold; a.coins += R.coins; a.xp += R.xp; a.parcels += R.parcels;
+    a.stars = a.stars.concat(R.stars).slice(-AWAY_STARS); a.pieces = a.pieces.concat(R.pieces).slice(0, AWAY_PIECES);
+    a.ups = a.ups.concat(R.ups); a.built = a.built.concat(R.built);
+    return a;
+  }
+  /** what happened while you were away, since you last saw it (G.S.away), or null */
+  const awayTally = () => (G.S && G.S.away) || null;
+  /** the tally seen (the card closed): gone (the caller saves) */
+  function awaySeen() { if (G.S) G.S.away = null; }
+  /** after a reload, a return from the background and (ROUND 25, A1) whenever the room or a station comes up: the time away on the
+   *  wall clock (now, ms). ROUND 25's order: the shop minded while you were away (awayRun: its sales, a build that ended inside the
+   *  absence, the auctions), then the browsers placed (fillAway; never a letter), then a build done by now (settleBuilds); one save
+   *  when anything happened. The room's MENU stamps savedAt every frame: its minutes never count */
+  function catchUp(now = Date.now(), rnd = () => RNG.f()) {
     const S = G.S; if (!S) return; ensure();
-    if (S.savedAt) { const away = Math.max(0, (Date.now() - S.savedAt) / 1000); if (away > 1) fillAway(away); }
-    S.savedAt = Date.now();
+    let n = 0;
+    if (S.savedAt) { const away = Math.max(0, (now - S.savedAt) / 1000); if (away > 1) { n += awayRun(S.savedAt, now, rnd) | 0; fillAway(away, rnd); } }
+    n += settleBuilds(now).length;
+    S.savedAt = now;
+    if (n) save();
   }
   /** a round-23 queue (no k, up to 6): up to CAP browse on, placed as catchUp places them; the rest go home */
   function migrateQueue() {
@@ -10376,7 +10549,14 @@ const SHOP = (() => {
     PATRON_LOOK, patronLook, unlike, findChance, drawK, onShow, heldPid, events, waiter, waiterIn, popAt, plan, hf, cust, stamp,
     newVisitor, decide, havePick, newCollector, wantedPiece, offerView, ask, sellOffer, keep, gone, letterFits, spotPay, sellLetter, accept, notNow,
     debugVisitors, fillAway, laneFree, nextArrival,
-    trialCast, setTrialCast, trialBodies, kidBodies, walkBody, castProfiles, CAST_ORDER, CAST_DEFAULT };   // (THE CUSTOMER CAST: on by default; &trialcast, runtime only)
+    trialCast, setTrialCast, trialBodies, kidBodies, walkBody, castProfiles, CAST_ORDER, CAST_DEFAULT,   // (THE CUSTOMER CAST: on by default; &trialcast, runtime only)
+    // round 25, REAL-TIME BUILDS (the setup's frozen API; the BUILD lane adds its own names on the line after this one)
+    BUILD_T, buildMs, building, buyBlock, buildLeft, settleBuilds, finishBuild, revealNext, revealDone,
+    // round 25, SELLING WHILE AWAY (the setup's frozen API; the AWAY lane adds its own names on the line after this one)
+    AWAY_PACE, AWAY_CAP_H, awayRun, awayTally, awaySeen,
+    AWAY_STARS, AWAY_PIECES, quiet: () => QUIET > 0, awayLast: () => LAST, awaySold,   // (the AWAY lane: the tally's list sizes; QUIET up — an away run under way; the last run's own doings, its stretches)
+    // (round 25's exports end here)
+  };
 })();
 
 
@@ -10909,17 +11089,18 @@ const PROTO = {};
   const DOT_OK = [5, 8], DOT_SC = [1.0, 0.6, 0.3];           // an eye dot: within 5 px PERFECT, 8 GOOD, further (inside AIM) LAZY
   const GLOW_R = 20, GLOW_T = 0.85;                          // the ember glow: the gold ring's radius (px), the time to reach it (s)
   // THE INNER RING (Alex, 2026-10-19: "when applying the basecoat: the circle should not close all the way because on mobile the finger
-  // blocks the view. it should close towards a second inner circle. same for highlights"). A ring that closes — the
-  // basecoat's as its zone fills (every coat: the cloak, the trim, a figure's own, a Legendary's GOLD LEAF), its gold one over the
-  // release window, each highlight — closes onto a TARGET RING round its point, drawn while it closes (quiet; lit once the ring has
-  // landed on it). It lands on it exactly when it landed on the point before (the chime, the beat), never smaller. r: the target's
-  // radius — a fingertip (44 pt across, on the point) leaves at least half of it in view on the smallest iPhone the game is checked
-  // on, an SE held sideways in Safari with its bars showing (1.5 pt a px: the finger 14.7 px round); coat / rel / glint: how far each
-  // ring closes onto it (as far as before: the same ring, only its landing moved out); col: the target's quiet colour, lit: its colour
-  // once landed (gold; over the release window it turns orange with its ring after the CRISP part); later: the later highlights' own
-  // targets (null: none — the next one's shows when it is next). Only the drawing: the timing, the windows, AIM, the scores and the
-  // sounds are as before ((69))
-  const RING = { r: 15, coat: 19, rel: 6, glint: 22, col: 'CRM0', lit: 'Y7', later: null };
+  // blocks the view. it should close towards a second inner circle. same for highlights"). The basecoat's rings — the one that closes
+  // as its zone fills (every coat: the cloak, the trim, a figure's own, a Legendary's GOLD LEAF) and its gold one over the release
+  // window — close onto a TARGET RING round the brush tip, drawn while they close (quiet; lit once the ring has landed on it). It lands
+  // on it exactly when it landed on the point before (the chime), never smaller. THE HIGHLIGHTS close all the way onto the point again
+  // (Alex, 2026-10-22: "for adding the highlights the circle should close all the way again. for details is fine as is."): no target,
+  // each ring 24 → 2 px, at its smallest on the beat, as before round 24 (drawGlintsUI). r: the target's radius — a fingertip (44 pt
+  // across, on the point) leaves at least half of it in view on the smallest iPhone the game is checked on, an SE held sideways in
+  // Safari with its bars showing (1.5 pt a px: the finger 14.7 px round); coat / rel: how far each ring closes onto it (as far as
+  // before: the same ring, only its landing moved out); col: the target's quiet colour, lit: its colour once landed (gold; over the
+  // release window it turns orange with its ring after the CRISP part). Only the drawing: the timing, the windows, AIM, the scores and
+  // the sounds are as before ((69))
+  const RING = { r: 15, coat: 19, rel: 6, col: 'CRM0', lit: 'Y7' };
   // ROUND 17 (Alex: "the timing needs to be more randomized, its too predictable on when to release/too easy, maybe sometimes the
   // circle goes slower/faster depending on difficulty of the rarity, maybe a short stop in between to change the rythm, narrowing
   // the timings in general"): THE RHYTHM. Every basecoat flood, highlight ring, glow and wash dash moves at a PACE of its own: two to
@@ -11083,7 +11264,8 @@ const PROTO = {};
   const pileTotal = () => FIGS.reduce((a, _, i) => a + pileOf(i), 0);
 
   Object.assign(G.stateDefaults, { fins: { matte: 1 }, kept: [], painted: 0, pile: { knight: 1 }, packs: 0, stock: [],   // kept = the display case, stock = for sale
-    up: {}, q: [], stats: {}, col: {}, open: true, comm: [], skill: [], list: [], orders: [], revs: [], rates: [], pileT: {} });   // (round 18: the shop's rating, the pile's cards from other sets' packs)   // (round 8: the auctions, the parcels to send, the reviews)   // the upgrades, the customers waiting, the counts, the collection log, the shop sign,
+    up: {}, q: [], stats: {}, col: {}, open: true, comm: [], skill: [], list: [], orders: [], revs: [], rates: [], pileT: {},   // (round 18: the shop's rating, the pile's cards from other sets' packs)   // (round 8: the auctions, the parcels to send, the reviews)   // the upgrades, the customers waiting, the counts, the collection log, the shop sign,
+    build: null, away: null, reveal: [] });   // (round 25: the build under way, the away tally, the REVEALs waiting — src/64_shop.js; no validator: SHOP.ensure() repairs them, a refused save would start a new game)
   G.validators.push((o) => !o.comm || Array.isArray(o.comm));          // the commissions, your recorded craft. (Your level and XP are NOT defaults: SHOP.ensure()
                                                                        // sets them, so a save from before levels still shows as one — its shop level carries over)
   G.validators.push((o) => !o.q || Array.isArray(o.q));
@@ -12379,7 +12561,8 @@ const PROTO = {};
   function enterPlans() { if (!P.planSel || !SHOP.trackOf(P.planSel)) P.planSel = PLAN_IDS()[0]; P.planArmed = null; P.dis = 0; P.inst = null; P.tapAt = 0; P.planF = 0; P.warmK = null; go('plans'); }   // nothing armed: a first tap only reads (planF, warmK: warmNext)
   function updPlans() {
     P.dis = Math.min(1, P.dis + TICK * 3);
-    if (P.inst) { updInst(); return; }   // (round 21: THE REVEAL is up — nothing else on the board answers)
+    if (P.inst) { if (!updInst(P.inst)) closeInst(); return; }   // (round 21: THE REVEAL is up — nothing else on the board answers)
+    if (SHOP.revealNext()) { openBuilt(); return; }   // (ROUND 25, B7: a build done — here, or while you were at another station — opens its REVEAL at once)
     if (TIME < (P.tapAt || 0)) { IN.click = false; IN.offTap = false; }   // (round 21: the double tap that closed the reveal is not a tap on BUY or a strip under it)
     const b = hitBtn();
     if (IN.pressed('cancel') || b === 'room') { toRoom(); return; }
@@ -12395,14 +12578,61 @@ const PROTO = {};
     const t = SHOP.trackOf(id), c = SHOP.trackCost(id);
     if (!SHOP.trackOpen(id)) { sfx('ui_back'); say(TF('The {name} opens at level {lvl}', { name: inLine(T(t.name)), lvl: t.lv })); return; }
     if (!isFinite(c)) { sfx('ui_back'); say(TF('The {name} can\'t get any better', { name: inLine(T(t.name)) })); return; }
+    if (SHOP.buyBlock(id)) { sfx('ui_back'); say(blockSay(id, false)); return; }   // (ROUND 25, B4: one build at a time — what is being built, and how long it has to go)
     if (G.S.money < c) { sfx('ui_back'); say(TF('The next {name} costs {money}', { name: inLine(T(t.name)), money: fmtMoney(c) })); return; }
-    const RV = typeof ROOMVIEW !== 'undefined' && ROOMVIEW.viewOf ? ROOMVIEW : null, was = !!(RV && RV.ready());   // (round 21's review: the room built as it is — its picture BEFORE the purchase is taken next frame: instPic)
-    SHOP.buyTrack(id); sfx('hammer'); sfx('sparkle');
-    const L = SHOP.up(id);
-    P.inst = { id, L, t: 0, title: TF('{name} · LEVEL {lvl}', { name: T(t.name), lvl: L }), line: SHOP.fxLine(id, L), look: typeof DRESS !== 'undefined' && DRESS.lookOf ? DRESS.lookOf(id, L) : { fresh: true, next: 0 },
-      view: RV ? RV.viewOf(id, L) : null, pic: null, picT: 0, before: was ? 'due' : null, mark: null };   // (round 21: THE REVEAL — the room's own picture round it, built a few steps a frame)
+    const RV = ROOMV(), was = !!(RV && RV.ready());   // (round 21's review: the room built as it is — its picture BEFORE the purchase is taken next frame: instPic)
+    SHOP.buyTrack(id); sfx('hammer');
+    const L = SHOP.up(id), b = SHOP.building();
+    if (b && b.id === id) { G.save(); return; }   // (ROUND 25, B2: a capped track's level is built in real time — its strip counts down; its REVEAL comes when it is done: openBuilt)
+    sfx('sparkle');
+    P.inst = revealCard(id, L, was);   // (round 21: THE REVEAL — the room's own picture round it, built a few steps a frame)
     if (RV && !was) RV.begin();   // (with a picture before it to take, the build starts once that is taken)
     G.save();
+  }
+  // ---- ROUND 25 (the owner: "the bigger upgrades take real time to build"; the BUILD lane): a capped track's level is BUILT on the wall
+  //      clock (SHOP.buyTrack starts it, SHOP.settleBuilds ends it, one at a time). THE BOARD: the building track's strip counts down in
+  //      place of its price (M:SS), the other capped tracks keep theirs dimmed with a small hammer (a tap or BUY says why); the endless
+  //      tracks buy as ever. THE REVEAL comes at the FINISH: here at once (openBuilt), in the room at once (src/63_room.js: the same card,
+  //      PROTO.revealCard), at another station it waits for the room. THE REVEAL IS A COMPONENT: revealCard makes the card, instPic takes
+  //      its pictures, updInst ticks it, drawInst draws it — the board's P.inst and the room's own
+  const ROOMV = () => (typeof ROOMVIEW !== 'undefined' && ROOMVIEW.viewOf ? ROOMVIEW : null);
+  /** a REVEAL card: level L of track id. was: the room is built as it was before that level (its picture before is taken, what
+   *  changed is ringed); built: a finished build's (its REVEAL waits in G.S.reveal until the card closes: SHOP.revealDone) */
+  function revealCard(id, L, was, built) {
+    const t = SHOP.trackOf(id), RV = ROOMV();
+    return { id, L, t: 0, title: TF('{name} · LEVEL {lvl}', { name: T(t.name), lvl: L }), line: SHOP.fxLine(id, L), look: typeof DRESS !== 'undefined' && DRESS.lookOf ? DRESS.lookOf(id, L) : { fresh: true, next: 0 },
+      view: RV ? RV.viewOf(id, L) : null, pic: null, picT: 0, before: was ? 'due' : null, mark: null, built: !!built };
+  }
+  /** a build done: is the room still built as it was before level L of track id (asked with G.S.up[id] one less for that moment)? */
+  function roomBefore(id, L) {
+    const RV = ROOMV(), S = G.S; if (!RV || !S || !S.up || (S.up[id] | 0) !== L) return false;
+    const lv = S.up[id]; S.up[id] = L - 1;
+    try { return RV.ready(); } finally { S.up[id] = lv; }
+  }
+  /** the board opens a finished build's REVEAL (the first one waiting) */
+  function openBuilt() {
+    const r = SHOP.revealNext(); if (!r || !SHOP.trackOf(r.id)) return;
+    const RV = ROOMV(), was = roomBefore(r.id, r.L);
+    P.inst = revealCard(r.id, r.L, was, true); P.planSel = r.id; P.planArmed = null;
+    if (RV && !was) RV.begin();
+    sfx('sparkle');
+  }
+  /** the board's REVEAL closed: the board takes taps REVEAL.arm s later; a finished build's has been shown (saved) */
+  function closeInst() {
+    const I = P.inst; P.inst = null; P.tapAt = TIME + REVEAL.arm;
+    if (I && I.built) { SHOP.revealDone(); G.save(); }
+  }
+  /** a build's time to go, M:SS (10:00 … 0:01: a second still to go reads 0:01) */
+  const buildClock = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+  /** why a blocked track buys nothing (B5): the one being built — its time to go; another capped track — one build at a time. caps:
+   *  the bottom band's small line (FONT_S), else the note */
+  function blockSay(id, caps) {
+    const b = SHOP.building(); if (!b) return '';
+    const bt = SHOP.trackOf(b.id), name = T(bt.name), time = buildClock(SHOP.buildLeft(Date.now()));
+    const busy = (q) => (bt.pl ? TF('ONE BUILD AT A TIME: THE {name} ARE BEING BUILT', { name: q }) : TF('ONE BUILD AT A TIME: THE {name} IS BEING BUILT', { name: q }));   // (pl: PATRONS, MIXING TRAYS)
+    if (caps) return b.id === id ? TF('BEING BUILT: {time} TO GO', { time }) : busy(textW(busy(name), FONT_S) <= W - 76 || !bt.short ? name : T(bt.short));
+    if (b.id === id) return bt.pl ? TF('The {name} are being built: {time} to go', { name: inLine(name), time }) : TF('The {name} is being built: {time} to go', { name: inLine(name), time });
+    return bt.pl ? TF('One build at a time: the {name} are being built', { name: inLine(name) }) : TF('One build at a time: the {name} is being built', { name: inLine(name) });
   }
   // ---- ROUND 21 (Alex: "when buying an upgrade the upgrade should visually pop up so that i can see the gfx of what it looks
   //      like"): THE REVEAL — a bought level opens a card over the board: the upgrade's name and level, the room's own picture round
@@ -12427,27 +12657,35 @@ const PROTO = {};
   //      MARK.wide of the picture's width or height: COUNTER 3's marble top, [0,6,128,23], rang as a line across the wall over the
   //      pieces (its sides off the picture, its foot on the counter's brass trim, gold on gold)
   const MARK = { min: 10, most: 0.5, wide: 0.9, zw: 32, zh: 16, cw: 64, ch: 30, blink: 2, lone: 5 };   // (lone, wide: its skeptic — a cluster of changed px under lone is a re-baked patch's shading, a box over wide of the picture's width or height has no ring)
-  function updInst() {
-    const I = P.inst; I.t += TICK;
+  /** a tick of REVEAL card I (the board's P.inst, the room's own) → false when it closes: a tap anywhere, Enter or Esc, armed REVEAL.arm
+   *  s after it opened (the caller then lets go of it — the board: closeInst) */
+  function updInst(I) {
+    I.t += TICK;
     const tap = IN.click || IN.offTap, key = IN.pressed('confirm') || IN.pressed('cancel');
     IN.click = false; IN.offTap = false;
-    if (I.t < REVEAL.arm || !(tap || key)) return;
-    P.inst = null; P.tapAt = TIME + REVEAL.arm; sfx('ui_back');
+    if (I.t < REVEAL.arm || !(tap || key)) return true;
+    sfx('ui_back'); return false;
   }
   /** the reveal's picture: the room built a few steps this frame, its picture taken when it is (at the START of the frame: the room's
-   *  draw borrows the frame — src/63_room.js ROOMVIEW.shot) */
-  function instPic() {
-    const I = P.inst, t0 = performance.now();
-    if (!I.t) return;   // (round 21's review: not in the purchase's own frame — the card's first draw and the purchase are its work)
+   *  draw borrows the frame — src/63_room.js ROOMVIEW.shot). ROUND 25, inRoom: the room's own card at a build's finish — the room's
+   *  draw builds the room itself, at once, right after this (init()): the picture BEFORE is taken in the card's first frame (the room
+   *  still as it was), the tier materials applied (ROOMS.apply), and the picture after when the room is built */
+  function instPic(I, inRoom) {
+    const t0 = performance.now();
+    if (!I.t && !inRoom) return;   // (round 21's review: not in the purchase's own frame — the card's first draw and the purchase are its work)
     if (I.before === 'due') {   // (its review: THE ROOM BEFORE — the same rect at the level before, the build still the old one, then the build starts)
       const lv = G.S.up[I.id]; G.S.up[I.id] = I.L - 1;
       try { I.before = ROOMVIEW.ready() ? ROOMVIEW.shot(I.view, TIME) : null; I.at = TIME; } finally { G.S.up[I.id] = lv; }
+      if (inRoom) { if (typeof ROOMS !== 'undefined') ROOMS.apply(); return; }   // (the room's own init() builds it at the new level next: one frame of work at the REVEAL's opening)
       ROOMVIEW.begin();
       if (performance.now() - t0 > REVEAL.budget / 2) return;   // (a slow picture: the build's steps from the next frame)
     }
     if (I.pend) { I.mark = I.look && I.look.fresh === false ? null : markOf(I.before, I.pend); I.pic = I.pend; I.pend = I.before = null; I.picT = I.t; return; }   // (the frame after the picture: what changed, then it shows — a NEW LOOK's only, MARK)
-    if (!ROOMVIEW.step(REVEAL.budget - (performance.now() - t0))) return;
-    if (performance.now() - t0 > REVEAL.budget && !I.held) { I.held = true; return; }   // (the build's last steps used this frame's share: the picture next frame)
+    if (inRoom) { if (!ROOMVIEW.ready()) return; }
+    else {
+      if (!ROOMVIEW.step(REVEAL.budget - (performance.now() - t0))) return;
+      if (performance.now() - t0 > REVEAL.budget && !I.held) { I.held = true; return; }   // (the build's last steps used this frame's share: the picture next frame)
+    }
     const pic = ROOMVIEW.shot(I.view, I.before ? I.at : undefined);   // (with a picture before: at its moment)
     if (I.before && pic) I.pend = pic; else { I.pic = pic; I.picT = I.t; }
   }
@@ -12507,8 +12745,8 @@ const PROTO = {};
     if (P.warmK !== key) { P.warmK = key; P.warmQ = id && SHOP.trackOf(id) && SHOP.trackOpen(id) && isFinite(SHOP.trackCost(id)) ? ROOMVIEW.nextIds(id) : []; }
     while (P.warmQ && P.warmQ.length) { const t0 = performance.now(); HD.layer('rd_' + P.warmQ.shift()); if (performance.now() - t0 > 0.3) break; }
   }
-  function drawInst() {
-    const I = P.inst, w = REVEAL.w, h = REVEAL.h, x = (W - w) >> 1, y = VT + ((VB - VT - h) >> 1), vw = I.view ? I.view[2] * 2 : 256, vh = I.view ? I.view[3] * 2 : 120, px = x + ((w - vw) >> 1), py = y + 14;
+  function drawInst(I = P.inst) {
+    const w = REVEAL.w, h = REVEAL.h, x = (W - w) >> 1, y = VT + ((VB - VT - h) >> 1), vw = I.view ? I.view[2] * 2 : 256, vh = I.view ? I.view[3] * 2 : 120, px = x + ((w - vw) >> 1), py = y + 14;
     remapRect(0, VT, W, VB - VT, DARK[2]);   // (the board dims behind it)
     const k = EASE.outCubic(clamp(I.t / REVEAL.open, 0, 1)), hh = Math.max(16, Math.round(h * k)), cy = y + ((h - hh) >> 1);   // (it opens from its middle)
     clip(x, cy, w, hh);
@@ -13133,7 +13371,7 @@ const PROTO = {};
     if (G.S && !Array.isArray(G.S.kept)) G.S.kept = [];
     if (G.S && (!G.S.pile || typeof G.S.pile !== 'object')) G.S.pile = { knight: 1 };
     if (G.S && !Array.isArray(G.S.stock)) G.S.stock = [];
-    SHOP.ensure(); SHOP.settlePending();
+    SHOP.ensure(); SHOP.settlePending(); SHOP.catchUp();   // (round 25, A1: a station catches up as it comes up — from a room that ticked a moment ago, nothing)
     debugState(p || {}); HDUI.events();   // (round 24: what the shop said before this station came up — a debug run — is history)
     needThemes();   // (M3: the themes this save shows — after the debug params and the settled sales — load now, before a screen needs them)
     const shop = !!p && (p.station === 'supply' || p.jump === 'shop' || p.jump === 'pack');   // (round 19: the supply shelf's ways in open the workbench, on the shop's choice)
@@ -13171,8 +13409,9 @@ const PROTO = {};
     HDUI.calm(!QUIET_STEPS[P.phase]);   // (round 24: a self-checkout's level-up waits for the step's end)
     SHOP.tick(TICK, undefined, false, { step: !!QUIET_STEPS[P.phase] }); P.ev = HDUI.events(); for (const e of P.ev) stationEvent(e); HDUI.bare(false, false);   // (round 24: the shop's events at a station; a "!" or "?" customer's patience pauses in a step)
     if (SHOP.commArrivals().length) { sfx('letter_open', { vol: 0.6 }); if (stationPhase(P.phase)) sayAmbient(T('A letter came: a commission is on the board')); }
-    const sold = SHOP.marketTick(Date.now(), () => RNG.f());   // an auction ended: a parcel to pack at the notebook
+    const sold = SHOP.marketTick(Date.now(), () => RNG.f()).concat(SHOP.awaySold());   // an auction ended: a parcel to pack at the notebook (round 25: or one ended while you were away — the away run's is quiet, its gavel and note are here)
     if (sold.length) { sfx('gavel', { vol: 0.6 }); P.soldT = TIME; if (stationPhase(P.phase) || P.phase === 'pick') sayAmbient(sold.length > 1 ? TF('{count} auctions sold: pack them at the notebook', { count: sold.length }) : TF(sold[0].bin ? 'BOUGHT OUTRIGHT on the notebook: {names} for {money}' : 'SOLD on the notebook: {names} for {money}', { names: sold[0].items.map((it) => T(FIGS[figIdx(it.p.fig)].name)).join(' + '), money: fmtMoney(sold[0].total) })); G.save(); }
+    SHOP.settleBuilds(Date.now());   // (round 25, the BUILD lane: a build done on the wall clock — its REVEAL waits in G.S.reveal: the UPGRADES board shows it at once, any other station leaves it for the room)
     if (HDUI.update()) return;   // a LEVEL UP banner holds the input
     if (POINT_STEPS[P.phase] && IN.pressed('confirm') && IN.mx < 0 && P.msgT > 1) say(T('Point at the spot with the mouse first'));   // AIM: Space taps where the pointer is
     for (const q of P.pops) q.t += TICK; while (P.pops.length && P.pops[0].t > 1.0) P.pops.shift();
@@ -13530,11 +13769,19 @@ const PROTO = {};
     const opts = t.max === Infinity ? [lv, String(L)] : t.max <= 6 ? ['pips', `${L}/${t.max}`, String(L)] : [`${L}/${t.max}`, String(L)], wOf = (o) => (o === 'pips' ? t.max * 4 : textW(o, FONT_S));
     let nm = nmS, lvl = String(L);
     for (const n of [nmF, nmS]) { const room = w - 15 - textW(n, FONT_S), o = opts.find((q) => wOf(q) <= room); if (o) { nm = n; lvl = o; break; } }   // (what the name leaves: a long name takes the pips' place)
-    textO(nm, x + 8, yy + 2, C.UI1, C.PAP4, FONT_S, 1, 0); (P.strips || (P.strips = {}))[id] = { name: nm, lvl, w: textW(nm, FONT_S) + (lvl === 'pips' ? t.max * 4 : textW(lvl, FONT_S)) + 15 };   // (what the strip shows: the tests and the lint read it)
-    if (lvl === 'pips') for (let q = 0; q < t.max; q++) rect(x + w - 4 - (t.max - q) * 4, yy + 3, 3, 3, q < L ? C.O4 : C.PAP2);   // the levels
+    const blk = isFinite(c) ? SHOP.buyBlock(id) : '', left = blk === 'build' ? buildClock(SHOP.buildLeft(Date.now())) : '';   // (ROUND 25: the build under way here, or another capped track's — one at its best has nothing to block)
+    textO(nm, x + 8, yy + 2, C.UI1, C.PAP4, FONT_S, 1, 0); (P.strips || (P.strips = {}))[id] = { name: nm, lvl, w: textW(nm, FONT_S) + (lvl === 'pips' ? t.max * 4 : textW(lvl, FONT_S)) + 15, blk, left };   // (what the strip shows: the tests and the lint read it)
+    if (lvl === 'pips') for (let q = 0; q < t.max; q++) rect(x + w - 4 - (t.max - q) * 4, yy + 3, 3, 3, q < L ? C.O4 : q === L && blk === 'build' ? ((TIME * 2) & 1 ? C.O2 : C.PAP1) : C.PAP2);   // the levels (ROUND 25: the one being built, blinking)
     else textO(lvl, x + w - 4, yy + 2, C.UI2, C.PAP4, FONT_S, 1, 2);
     textO(t.sh(L), x + 4, yy + 9, C.UI2, C.PAP4, FONT_S, 1, 0);
-    textO(isFinite(c) ? fmtShort(c) : T('MAX'), x + w - 4, yy + 9, isFinite(c) ? (can ? C.G3 : C.R3) : C.UI2, C.PAP4, FONT_S, 1, 2);
+    if (blk === 'build') { const tw = textW(left, FONT_S); textO(left, x + w - 4, yy + 9, C.B3, C.PAP4, FONT_S, 1, 2); hammerMark(x + w - 10 - tw, yy + 9); }   // (ROUND 25, B5: its countdown in place of its price, M:SS, with the hammer)
+    else if (blk === 'busy') { const ps = isFinite(c) ? fmtShort(c) : T('MAX'), tw = textW(ps, FONT_S); textO(ps, x + w - 4, yy + 9, C.PAP1, C.PAP4, FONT_S, 1, 2); hammerMark(x + w - 10 - tw, yy + 9, true); }   // (another capped track's build: its price dimmed, a small hammer — one build at a time)
+    else textO(isFinite(c) ? fmtShort(c) : T('MAX'), x + w - 4, yy + 9, isFinite(c) ? (can ? C.G3 : C.R3) : C.UI2, C.PAP4, FONT_S, 1, 2);
+  }
+  /** ROUND 25: the strip's small hammer (5 x 5): a steel head, an oak handle — dim: a blocked strip's, in the paper's own shade */
+  function hammerMark(x, y, dim) {
+    const H5 = ['.SSS.', 'SSSSw', '...w.', '..w..', '.w...'];
+    H5.forEach((r, dy) => { for (let dx = 0; dx < 5; dx++) { const k = r[dx]; if (k !== '.') pset(x + dx, y + dy, dim ? (k === 'S' ? C.PAP1 : C.PAP2) : k === 'S' ? C.STL5 : C.WOD3); } });
   }
   /** your level, as a card: LEVEL n, the XP bar, what the next level brings */
   function levelCard(x, y, w, h) {
@@ -13547,7 +13794,7 @@ const PROTO = {};
     if (nxt) textO(nxt, x + 6, y + h - 7, C.B6, C.B1, FONT_S, 1, 0);   // (as many as fit the card)
   }
   function drawPlansUI() {
-    if (P.inst && P.inst.t >= REVEAL.open) { bottom(); P.btns.length = 0; drawInst(); textO(IN.touch ? T('Tap anywhere to close') : T('Click, Enter or Esc to close'), W >> 1, VB + 5, C.CRM1, C.UI0, FONT_M, 1, 1); return; }   // (round 21's review: THE REVEAL open all the way covers the whole board — its strips are not drawn under it)
+    if (P.inst && P.inst.t >= REVEAL.open) { bottom(); P.btns.length = 0; drawInst(P.inst); textO(IN.touch ? T('Tap anywhere to close') : T('Click, Enter or Esc to close'), W >> 1, VB + 5, C.CRM1, C.UI0, FONT_M, 1, 1); return; }   // (round 21's review: THE REVEAL open all the way covers the whole board — its strips are not drawn under it)
     levelCard(76, VT + 4, 168, 26);   // pinned on the cork (room_board: the board fills x 73..247)
     const pg = planPage(), np = Math.ceil(SHOP.TRACKS.length / PLAN_PER), onPg = SHOP.TRACKS.slice(pg * PLAN_PER, pg * PLAN_PER + PLAN_PER);
     onPg.forEach((t, k) => { const [x, y] = stripAt(k); planCard(t.id, x, y, STRIP.w, STRIP.h); });
@@ -13555,14 +13802,19 @@ const PROTO = {};
     if (np > 1) { btn('pg<', '◀', 50, VT + 70, 20, 22); btn('pg>', '▶', 250, VT + 70, 20, 22); textO(`${pg + 1}/${np}`, 60, VT + 96, C.CRM1, C.UI0, FONT_S, 1, 1); }
     bottom();
     if (P.inst) {   // round 21: THE REVEAL over the board (nothing under it to tap: a tap anywhere closes it)
-      P.btns.length = 0; drawInst();
+      P.btns.length = 0; drawInst(P.inst);
       textO(IN.touch ? T('Tap anywhere to close') : T('Click, Enter or Esc to close'), W >> 1, VB + 5, C.CRM1, C.UI0, FONT_M, 1, 1);
       return;
     }
-    const id = P.planSel, t = SHOP.trackOf(id), L = SHOP.up(id), c = SHOP.trackCost(id);
+    const id = P.planSel, t = SHOP.trackOf(id), L = SHOP.up(id), c = SHOP.trackCost(id), blk = isFinite(c) ? SHOP.buyBlock(id) : '';
     textO(TF(t.max !== Infinity ? '{name} · level {lvl} of {max}' : '{name} · level {lvl}', { name: nameCase(T(t.name)), lvl: L, max: t.max }), 6, VB + 1, C.Y6, C.UI0, FONT_M, 1, 0);
     if (!SHOP.trackOpen(id)) textO(TF('OPENS AT LEVEL {lvl}: {fx}', { lvl: t.lv, fx: SHOP.fxLine(id, 1) }), 6, VB + 10, C.CRM0, C.UI0, FONT_S, 1, 0);
-    else {
+    else if (blk) {   // ROUND 25 (B5): being built — its time to go, no BUY; another capped track being built — one at a time, BUY dimmed (a tap says why)
+      const ln = blockSay(id, true); let bx = W;
+      if (blk === 'busy' && isFinite(c)) { const bl = TF('BUY {money}', { money: fmtShort(c) }), bw = Math.max(58, textW(bl, FONT_M) + 8); bx = W - 4 - bw; btn('buy', bl, bx, VB + 2, bw, 13, { primary: true, sel: true, dim: true }); }
+      textO(ln, 6, VB + 10, blk === 'build' ? C.B6 : C.CRM0, C.UI0, FONT_S, 1, 0);
+      if (6 + textW(ln, FONT_S) > bx - 3) (P.over || (P.over = [])).push('build: bottom line');   // (the layout lint: its words run into BUY)
+    } else {
       textO(isFinite(c) ? TF('NEXT: {fx}', { fx: SHOP.fxLine(id, L + 1) }) : TF('AT ITS BEST: {fx}', { fx: SHOP.fxLine(id, L) }), 6, VB + 10, C.CRM0, C.UI0, FONT_S, 1, 0);
       if (isFinite(c)) { const bl = TF('BUY {money}', { money: fmtShort(c) }), bw = Math.max(58, textW(bl, FONT_M) + 8); btn('buy', bl, W - 4 - bw, VB + 2, bw, 13, { primary: true, sel: true, dim: G.S.money < c }); }
     }
@@ -14323,10 +14575,9 @@ const PROTO = {};
   function drawGlintsUI() {
     const J = P.J, G2 = J.gp, t = P.pt;
     ringClip();
-    for (let k = G2.n - 1; k >= G2.r; k--) {   // (the inner ring: the next rings first — the one to tap and its target over them)
+    for (let k = G2.n - 1; k >= G2.r; k--) {   // (the next rings first — the one to tap over them)
       const a = G2.at[k], pc = G2.pc ? G2.pc[k] : null, lead = pc ? pc.T : RING_BEATS * BEAT; if (t < a - lead) continue;
-      const u = t >= a ? 1 + (t - a) / lead : pc ? paceU(pc, t - (a - lead)) : clamp((t - (a - lead)) / lead, 0, 1), p = G2.pts[k], x = J.L.x0 + p.x, y = J.L.y0 + p.y, r = closeR(RING.glint, u);   // (round 17: at its own pace; the inner ring: onto its target ring, on the beat)
-      if (k === G2.r) innerRing(x, y, C[t >= a ? RING.lit : RING.col]); else if (RING.later) circ(x, y, RING.r, C[RING.later]);
+      const u = t >= a ? 1 + (t - a) / lead : pc ? paceU(pc, t - (a - lead)) : clamp((t - (a - lead)) / lead, 0, 1), p = G2.pts[k], x = J.L.x0 + p.x, y = J.L.y0 + p.y, r = Math.round(lerp(24, 2, Math.min(1, u)));   // (round 17: at its own pace; all the way onto the point on the beat, no target ring — Alex, 2026-10-22: "for adding the highlights the circle should close all the way again")
       circ(x, y, r, u > 0.88 ? C.Y7 : k === G2.r ? C.CRM2 : C.UI5); if (k === G2.r) circ(x, y, r + 1, C.UI0);
       if (k === G2.r) { pset(x, y, C.LIT3); pset(x - 1, y, C.Y6); pset(x + 1, y, C.Y6); pset(x, y - 1, C.Y6); pset(x, y + 1, C.Y6); }
     }
@@ -14440,7 +14691,7 @@ const PROTO = {};
     return (P.noteL = { key, x, y, w, h, cx: ax + (aw >> 1), ls, ty, m });
   }
   function drawPaint() {
-    if (P.inst && P.inst.view && !P.inst.pic && P.phase === 'plans' && typeof ROOMVIEW !== 'undefined') instPic();   // (round 21: THE REVEAL's picture of the room — first, before this frame is drawn)
+    if (P.inst && P.inst.view && !P.inst.pic && P.phase === 'plans' && typeof ROOMVIEW !== 'undefined') instPic(P.inst);   // (round 21: THE REVEAL's picture of the room — first, before this frame is drawn)
     else if (P.phase === 'plans' && !P.inst) warmNext();   // (round 21's review: the next level's new dressings decoded while the board is still)
     P.btns.length = 0; P.over = [];
     drawRoom(-1);
@@ -14507,6 +14758,30 @@ const PROTO = {};
     return m < 1 ? T('SAVED JUST NOW') : m < 60 ? TF('SAVED {count} MIN AGO', { count: m }) : m < 48 * 60 ? TF('SAVED {count} H AGO', { count: Math.floor(m / 60) }) : TF('SAVED {count} DAYS AGO', { count: Math.floor(m / 1440) });
   }
   const MENU_X = 8, MENU_W = 104;
+  /** ROUND 25 (the lead's 1a; the owner: "user should see how much money was made while being away when they log back in"): the line
+   *  under SAVED n AGO while an away tally with coins waits for its card — read, never consumed (the room's card still opens): THE SHOP
+   *  MADE ¤n WHILE YOU WERE AWAY, the money in the money's yellow (C.Y6, as the card), in rows of maxW px (the panel's 96: the line is
+   *  ~170 px) broken where it reads best — after the money (THE SHOP MADE ¤n / WHILE YOU WERE AWAY), else the money a row of its own
+   *  (7 digits), else at any space → its rows, each [[text, colour], …] (a colour's run one string), or null: no coins (a CLOSED sign,
+   *  a bare counter, the card already seen) */
+  function titleAway(maxW) {
+    const a = G.S && G.S.away, coins = a && typeof a === 'object' ? Math.round(+a.coins || 0) : 0; if (!(coins > 0)) return null;
+    const money = fmtMoney(coins), base = C.CRM1, s = TF('THE SHOP MADE {money} WHILE YOU WERE AWAY', { money: '\u0001' });
+    const rowW = (r) => textW(r.map((q) => q[0]).join(''), FONT_S), fits = (rows) => rows.every((r) => rowW(r) <= maxW);
+    const tidy = (rows) => rows.map((r) => r.filter((q) => q[0]).reduce((o, q) => { const l = o[o.length - 1]; if (l && l[1] === q[1]) l[0] += q[0]; else o.push([q[0], q[1]]); return o; }, [])).filter((r) => r.length);
+    const [pre, post] = s.split('\u0001').map((x) => (x || '').trim()), M = [money, C.Y6];
+    for (const rows of [[[[pre + ' ', base], M, [' ' + post, base]]], [[[pre + ' ', base], M], [[post, base]]], [[[pre, base]], [M], [[post, base]]]]) if (fits(tidy(rows))) return tidy(rows);
+    const words = s.split(' ').filter(Boolean).map((wd) => { const k = wd.indexOf('\u0001'); return k < 0 ? [[wd, base]] : [[wd.slice(0, k), base], M, [wd.slice(k + 1), base]]; }), rows = []; let cur = null;   // (else at any space)
+    for (const wd of words) { const next = cur ? cur.concat([[' ', base]], wd) : wd; if (cur && rowW(next) > maxW) { rows.push(cur); cur = wd; } else cur = next; }
+    if (cur) rows.push(cur);
+    return tidy(rows);
+  }
+  /** a row of coloured runs centred at cx (each run starts where the one before it would have put its next letter) → its width */
+  function titleRow(r, cx, y) {
+    const all = r.map((q) => q[0]).join(''), w = textW(all, FONT_S), adv = (s) => (s ? textW(s + 'I', FONT_S) - textW('I', FONT_S) : 0), x0 = Math.round(cx - w / 2); let pre = '';
+    for (const [s, c] of r) { textO(s, x0 + adv(pre), y, c, C.UI0, FONT_S, 1, 0); pre += s; }
+    return w;
+  }
   Scenes.define('title', {
     enter() {
       initRoom(); ST.key = 'bench'; HD.room.scan(R.B); R.scanned = 'bench'; TT.t = 0; TT.arm = 0; TT.sel = 0; TT.note = null;   // (a note from an earlier visit never comes back: the review)
@@ -14549,13 +14824,15 @@ const PROTO = {};
       P.btns = TT.btns; P.btns.length = 0;
       if (G.S && G.S.admin) textO(T('ADMIN MODE'), W - 6, BAR + 4, C.Y7, C.UI0, FONT_S, 1, 2);
       // the menu: a panel on the left of the bench (the hero stands in the middle; under the SETTINGS panel when that is open)
-      const go1 = hasGame(), items = titleItems(), keys = !IN.touch, x = MENU_X, y = VT + 9, h = go1 ? 93 : 56, bx = x + 4, bw = MENU_W - 8;
+      const go1 = hasGame(), items = titleItems(), keys = !IN.touch, x = MENU_X, y = VT + 9, aw = go1 ? titleAway(MENU_W - 8) : null, h = (go1 ? 93 : 56) + (aw ? 8 * aw.length : 0), bx = x + 4, bw = MENU_W - 8;   // (round 25: the away line's rows grow the panel)
       remapRect(x, y, MENU_W, h, DARK[3]); rectb(x, y, MENU_W, h, C.UI0); rectb(x + 1, y + 1, MENU_W - 2, h - 2, C.UI3);
       let yy = y + 6;
       btn('resume', go1 ? T('RESUME') : T('START'), bx, yy, bw, 22, { primary: true, sel: TT.sel === 0 });
+      TT.away = null;
       if (go1) {
         yy += 26; textO(TF('LEVEL {lvl} · {money}', { lvl: SHOP.lvl(), money: fmtMoney(G.S.money) }), x + (MENU_W >> 1), yy, C.CRM2, C.UI0, FONT_S, 1, 1);
         yy += 8; textO(savedAgo(TT.saved) || T('A NEW SHOP'), x + (MENU_W >> 1), yy, C.CRM0, C.UI0, FONT_S, 1, 1);
+        if (aw) { const y0 = yy + 8, ws = aw.map((r, i) => titleRow(r, x + (MENU_W >> 1), y0 + 8 * i)); yy += 8 * aw.length; TT.away = { rows: aw.map((r) => r.map((q) => q[0]).join('')), money: aw.flat().filter((q) => q[1] === C.Y6).map((q) => q[0]).join(''), box: [x + (MENU_W >> 1) - (Math.max(...ws) >> 1), y0, Math.max(...ws), 8 * aw.length - 3] }; }   // (round 25, 1a: THE SHOP MADE ¤n WHILE YOU WERE AWAY — the tests and the lint read TT.away)
         yy += 11; btn('new', TT.arm ? T('SURE? TAP AGAIN') : T('NEW GAME'), bx, yy, bw, 16, { sel: !!TT.arm || (keys && TT.sel === 1) });
         yy += 20;
       } else yy += 28;
@@ -14568,6 +14845,10 @@ const PROTO = {};
   if (typeof DEV !== 'undefined' && DEV.proto) Object.assign(DEV.proto, { TT, savedAgo, titleItems, hasGame });   // (round 16: the home screen)
   if (typeof DEV !== 'undefined' && DEV.proto) Object.assign(DEV.proto, { BACKD, REVEAL, MARK, markOf });   // (round 21's review: the close-ups' maps and the reveal's numbers, for the tests)
   if (typeof DEV !== 'undefined' && DEV.proto) Object.assign(DEV.proto, { RING, closeR });   // (the inner ring, Alex 2026-10-19: its numbers, for the tests and the pictures)
+  // ROUND 25, the BUILD lane: THE REVEAL as a component (the room's own card at a build's finish draws with it) — and, for the tests and
+  // the pictures, buyNow(id): the purchase, its build done at once (SHOP.finishBuild) and its REVEAL opened as at a build's end
+  Object.assign(PROTO, { revealCard, roomBefore, instPic, updInst, drawInst, buildClock, REVEAL });
+  if (typeof DEV !== 'undefined' && DEV.proto) Object.assign(DEV.proto, { buyNow: (id) => { buyPlan(id); const b = SHOP.building(); if (b && b.id === id && !P.inst) { SHOP.finishBuild(Date.now()); if (P.phase === 'plans') openBuilt(); } }, openBuilt, closeInst, blockSay, buildClock, roomBefore, revealCard });
 
   // ================================================================== debug
   // ?money= (engine) &fins=all &shelf=n &pile=all|0|knight:2,wyrm:1 &fig=k|id (in the pile, selected) &series=kd|pc &shop=k|id|pack
@@ -14806,6 +15087,7 @@ const ROOMVIEW = {}, ROOM = {};
   function stationAt0(x, y) {
     if (x < 0 || y < VT || y >= VB) return null;
     for (const s of RM.st) { const R = s.badgeR; if (R && x >= R[0] && x < R[0] + R[2] && y >= R[1] && y < R[1] + R[3]) return s; }   // (round 24 plates) a badge opens its own station (its whole drawn rect, the border too)
+    { const R = RVL.R; if (R && x >= R[0] && x < R[0] + R[2] && y >= R[1] && y < R[1] + R[3]) { const s = RM.st.find((q) => q.key === 'board'); if (s) return s; } }   // (ROUND 25: the build badge opens the UPGRADES board)
     { const R = signRect(), inR = x >= R.x && x < R.x + R.w && y >= R.y && y < R.y + R.h, near = x >= R.x - 2 && x < R.x + R.w + 2 && y >= R.y - 4 && y < R.y + R.h + 2;
       if (inR || (near && !idAt(x, y))) return SIGN_ST; }   // the sign (round 15: its tier's size; its fingertip margin only where no station is — the review)
     { const o = RM.own && RM.own[y * W + x]; if (o) return RM.st.find((s) => s.sid === o) || null; }   // a piece drawn into the room answers for its place (the review: a counter piece's head stood over the display shelf)
@@ -14840,8 +15122,9 @@ const ROOMVIEW = {}, ROOM = {};
     enter(p) {
       RM.rescan = true; init(); RM.hover = RM.press = null; RM.msg = ''; RM.msgT = 9; RM.t = 0; RM.keyT = -9; RM.signT = undefined; RM.bellT = undefined; RM.letterT = undefined; RM.menu = null; RM.rate = null; RM.tapAt = p && p.from === 'title' ? TAP_ARM : 0;   // (round 16's review: from the home screen the room takes taps TAP_ARM s after it comes up — the second tap of a double tap on RESUME; back from a station its zoom-out holds the taps anyway)
       RM.card = null; RM.ev = []; RM.saleNoteT = -9; RM.noteQ = []; RM.lineWait = null; releaseAll();   // (round 24: no card open, this tick's shop events, the last sale note's time, the notes waiting their turn, the bottom line's waiter)
+      NOTICE.k = null;   // (round 25: no notice up — the away card, a build's REVEAL: they open by themselves, below)
       if (G.S && !G.S.fins) G.S.fins = { matte: 1 };
-      SHOP.ensure(); SHOP.settlePending(); if (HD.theme.wanted) HD.theme.wanted();   // (M3: the save's themes load while you look round)
+      SHOP.ensure(); SHOP.settlePending(); SHOP.catchUp(); if (HD.theme.wanted) HD.theme.wanted();   // (M3: the save's themes load while you look round; round 25, A1: the room catches up as it comes up — the minutes on the title count as away, back from a station nothing)
       if (p && typeof DEV !== 'undefined' && DEV.proto && DEV.proto.debugState) DEV.proto.debugState(p);   // (the debug params: &lvl= &cust= &custk= &custt= &stock= …)
       HDUI.events();   // (round 24: whatever the shop said before the room came up — a catch-up's visitors, a debug run — is history: no note; a "!" or "?" already up: the bottom line says it)
       const from = p && p.from && RM.st.find((s) => s.key === p.from);
@@ -14850,7 +15133,7 @@ const ROOMVIEW = {}, ROOM = {};
       const nu = ROOMS.check(); if (nu.length) { G.save(); AUDIO.sfx('legendary_chime'); RM.msg = unlockNote(nu); RM.msgT = -2; }
       ROOMS.apply(); AUDIO.music(ROOMS.song()); AUDIO.ambience('indoor');
       if (typeof DEV !== 'undefined') DEV.room = { RM, STATIONS, SIGN, TITLE_ST, stationAt, go, idAt, pickRows, PROJ, AN, signRect, PIECE, depthAt, d8, piece, init, openMenu, MENU_ROWS, menuAt, RATE_ST, openRate, RATE_BOX, WALK, rateEffect,
-        RCOL, openCard, closeCard, custStop, walkOrder, waiterNote, CARD, BLOCK, LOCK_BADGE, BADGES, badgeOf };   // (round 24: the cards, the ◀ ▶ walk with its customer stop; round 24 plates: the badges)
+        RCOL, openCard, closeCard, custStop, walkOrder, waiterNote, CARD, BLOCK, LOCK_BADGE, BADGES, badgeOf, NOTICE, noticeTick };   // (round 24: the cards, the ◀ ▶ walk with its customer stop; round 24 plates: the badges; round 25: the notices)
       if (typeof OWNER !== 'undefined') OWNER.enter(p);   // OWNER hook 1/10: the shopkeeper at the station you come back from (src/72_owner.js)
       if (typeof LIFE !== 'undefined' && LIFE.enter) LIFE.enter(p);   // LIFE hook 1: the customers, each mid-visit, rebuilt from SHOP's records (src/74_life.js)
     },
@@ -14866,6 +15149,7 @@ const ROOMVIEW = {}, ROOM = {};
       HDUI.bare(false, false);   // (a piece on show ends a bare spell)
       const sold = SHOP.marketTick(Date.now(), () => RNG.f());   // an auction ended: a parcel waits at the notebook
       if (sold.length) { AUDIO.sfx('gavel', { vol: 0.6 }); RM.msg = sold.length > 1 ? TF('{count} auctions sold: pack them at the notebook', { count: sold.length }) : TF(sold[0].bin ? 'Bought outright on the notebook for {money}: pack it and send it' : 'Sold on the notebook for {money}: pack it and send it', { money: fmtMoney(sold[0].total) }); RM.msgT = 0; RM.soldT = RM.t; G.save(); }
+      SHOP.settleBuilds(Date.now());   // (round 25, the BUILD lane: a build done on the wall clock — its REVEAL waits in G.S.reveal; the notices below open it)
       if (SHOP.commArrivals().length) { AUDIO.sfx('letter_open', { vol: 0.6 }); RM.msg = T('A letter came: a commission is on the board'); RM.msgT = 0; RM.letterT = RM.t; }   // (by post: the sign said CLOSED when it was due)
       if (typeof OWNER !== 'undefined') OWNER.update();   // OWNER hook 2/10
       if (typeof LIFE !== 'undefined' && LIFE.update) LIFE.update();   // LIFE hook 2: the customers follow SHOP's timeline (and ring the bell)
@@ -14879,6 +15163,7 @@ const ROOMVIEW = {}, ROOM = {};
         else if (Zm.dir < 0 && Zm.t <= 0) RM.zoom = null;
         return;
       }
+      if (noticeTick()) return;   // (round 25: the away card, then a finished build's REVEAL — nothing behind them answers)
       if (RM.card) { RM.hover = null; updCard(); return; }   // (round 24: THE OFFER or THE REQUEST is up — nothing behind it answers)
       const mouse = IN.mouseActive() && !IN.touch && IN.mouseT > RM.keyT;   // arrows take over until the mouse moves again
       RM.hover = mouse && !RM.pick && !RM.rate ? stationAt(IN.mx, IN.my) || stripAt(IN.fx, IN.fy) : null;
@@ -14910,9 +15195,10 @@ const ROOMVIEW = {}, ROOM = {};
       if (IN.pressed('confirm') && lit) go(lit);
     },
     draw() {
+      revealPic();   // (round 25, the BUILD lane: a REVEAL's picture of the room, taken first — ROOMVIEW.shot borrows the frame, as the board's instPic)
       init(); if (DRESS.paintStock(RM.cv) || RM.stStale) { RM.stStale = false; stationsAgain(); }   // (M5: the room theme; round 15: the dressings — rebuilt only when they change; the stock when it changes, and the taps its empty slots give back; round 21: or when the reveal's picture repainted it)
       HD.room.after = windowTiers; HD.backdrop(RM.cv, RM.L, null, true); HD.room.after = null;   // (M3: the room baked past the frame: the strips round it show the rest; round 15: the window's tiers)
-      const lit = RM.zoom ? RM.zoom.st : RM.pick || RM.menu || RM.rate || RM.card ? null : RM.hover || RM.press, WD = HD.WB.d;
+      const lit = RM.zoom ? RM.zoom.st : RM.pick || RM.menu || RM.rate || RM.card || NOTICE.k ? null : RM.hover || RM.press, WD = HD.WB.d;
       lampLight(); lockedSpots(); sign();
       if (lit && lit.px) {   // the station lights up (one step brighter) and gets a warm outline (in the strips too) — under the pieces (round 15 review: a hovered display shelf's outline ran across the counter's pieces)
         for (const i of lit.px) FB[i] = LIGHT[1][FB[i]];
@@ -14930,6 +15216,7 @@ const ROOMVIEW = {}, ROOM = {};
       if (typeof LIFE !== 'undefined' && LIFE.draw) { if (LIFE.lit) LIFE.lit(lit && lit.key === 'cust' ? lit.cid : null); LIFE.draw(); }
       else if (typeof OWNER !== 'undefined') OWNER.draw();
       for (const s of RM.st) if (s.badgeR) badge(s, s === lit);   // (round 24 plates: the STATUS BADGES, over the people — their places keep clear of every head)
+      buildMark(badges, lit);   // (round 25, the BUILD lane: a build under way shows at its upgrade's spot)
       PFX.draw(1);
       if (RM.zoom) zoomDraw(RM.zoom);
       // the bands
@@ -14951,7 +15238,7 @@ const ROOMVIEW = {}, ROOM = {};
       // (round 24: a waiting "!" or "?" customer, when nothing else is said — their note stays on the bottom line until you answer;
       //  the ◀ ▶ walk on them: who, and what they bring; a card up: how to put it off — Esc or a tap beside it decides nothing)
       const note = RM.msgT < 2.5, s = note || RM.card ? null : lit, sn = s ? (s.key === 'cust' ? s.label : T(s.name)) : '', wt = !s && !note && !RM.card ? HDUI.waiter() : null;
-      const line = RM.rate ? (IN.touch ? T('Tap anywhere to close') : T('Click, Enter or Esc to close')) : RM.menu ? (IN.touch ? T('The shop waits while the menu is open') : T('▲ ▼ and Enter · Esc goes back to the shop')) : note ? RM.msg : RM.card ? (RM.card.phase === 'gone' || RM.card.phase === 'huff' || RM.card.phase === 'lucky' ? '' : IN.touch ? T('Tap beside the card to answer later') : T('Esc or a click beside the card: answer later')) : RM.pick ? (IN.touch ? T('Tap a room theme to switch to it') : T('Click a room theme (or ▲ ▼ and Enter) · Esc closes'))
+      const line = NOTICE.k ? noticeLine() : RM.rate ? (IN.touch ? T('Tap anywhere to close') : T('Click, Enter or Esc to close')) : RM.menu ? (IN.touch ? T('The shop waits while the menu is open') : T('▲ ▼ and Enter · Esc goes back to the shop')) : note ? RM.msg : RM.card ? (RM.card.phase === 'gone' || RM.card.phase === 'huff' || RM.card.phase === 'lucky' ? '' : IN.touch ? T('Tap beside the card to answer later') : T('Esc or a click beside the card: answer later')) : RM.pick ? (IN.touch ? T('Tap a room theme to switch to it') : T('Click a room theme (or ▲ ▼ and Enter) · Esc closes'))
         : s ? (s.key === 'cust' ? s.hint : lockOf(s) || T(s.hint)) : wt ? waiterNote(wt) : IN.touch ? T('Tap the window bench to paint, the counter to put pieces out…') : T('Click a station (or ◀ ▶ and Enter)');   // (round 24: the counter sells nothing itself — customers buy what you put out)
       textO(sn, 6, VB + 5, s && lockOf(s) ? C.CRM0 : C.Y6, C.UI0, FONT_M, 1, 0);
       const room = W - 12 - (s ? textW(sn, FONT_M) + 8 : 0), fit = textW(line, FONT_M) <= room;   // a hint never runs into the name
@@ -14960,6 +15247,7 @@ const ROOMVIEW = {}, ROOM = {};
       if (RM.pick) drawPick();
       if (RM.rate) drawRate();
       if (RM.card) drawCard();
+      if (NOTICE.k) noticeDraw();   // (round 25: the away card, a build's REVEAL)
       if (RM.menu) drawMenu();
       HDUI.draw();
       if (typeof SETTINGS !== 'undefined' && SETTINGS.isOpen()) SETTINGS.draw();
@@ -15151,6 +15439,208 @@ const ROOMVIEW = {}, ROOM = {};
     last.forEach((e, i) => { const yy = y + 96 + i * 9, who = whoOf(e), words = e.y ? T(e.y) : ''; PROTO.starRow(x + 8, yy - 1, e.s); textO(who && words ? `${who}: ${words}` : who || words, x + 46, yy, C.CRM2, C.UI0, FONT_S, 1, 0); });
     textO(T('KEEP THE COUNTER STOCKED · ANSWER REQUESTS · PACK WITH CARE'), cx, y + h - 10, C.CRM0, C.UI0, FONT_S, 1, 1);   // (ROUND 24: no plaques any more — a stocked counter, the "?" requests and the parcels make the name)
   }
+  // ---- ROUND 25 (the setup; the lanes AWAY and BUILD fill their blocks below): THE NOTICES — cards the room opens by itself, one at a
+  //      time, as soon as nothing else is (after the zoom, a LEVEL UP banner, THE MENU and SETTINGS; never over a customer's card, the
+  //      room themes or THE RATING): first THE AWAY CARD (what the shop did while you were away: SHOP.awayTally), then a finished
+  //      build's REVEAL (SHOP.revealNext). Nothing behind a notice answers; the shop's clock runs on
+  const NOTICE = { k: null };   // the notice up: 'away' | 'reveal' | null
+  /** a tick of the notices: the one up, else the next one due → true while one is up (the room's update then stops there) */
+  function noticeTick() {
+    if (!NOTICE.k && !RM.card && !RM.pick && !RM.rate) { if (awayDue()) { NOTICE.k = 'away'; awayOpen(); } else if (revealDue()) { NOTICE.k = 'reveal'; revealOpen(); } }
+    if (!NOTICE.k) return false;
+    RM.hover = null;
+    if (!(NOTICE.k === 'away' ? awayUpdate() : revealUpdate())) { NOTICE.k = null; RM.tapAt = RM.t + TAP_ARM; }   // (closed: the room takes taps TAP_ARM s later — a double tap's second one is not a tap on the room)
+    return true;
+  }
+  function noticeDraw() { if (NOTICE.k === 'away') awayDraw(); else if (NOTICE.k === 'reveal') revealDraw(); }
+  /** the bottom line while a notice is up */
+  const noticeLine = () => (IN.touch ? T('Tap anywhere to close') : T('Click, Enter or Esc to close'));
+  // ---- THE AWAY CARD (the AWAY lane): due (SHOP.awayTally() holds something) → open → a tick each frame (false: it closed — the tally
+  //      seen, saved) → its draw over the dimmed room.
+  //      ROUND 25, WHILE YOU WERE AWAY (the design's A7; the owner, 2026-10-22: "user should see how much money was made while being away
+  //      when they log back in"): THE RATING's panel — its width, the room dimmed, a gold inner border — with the cards' little settle as
+  //      it comes up. Top to bottom, a line only when it has something: the title; THE HEADLINE, the coins (+¤n: FONT_M at 2x in the
+  //      money's yellow, the biggest line); THE SHOPKEEPER SOLD n PIECES; the pieces' fronts (the shelf's minis on rarity-rimmed tiles, as
+  //      many as fit, +n MORE; a theme still on its way: left out); the buyers' stars and how many; LEVEL n! (the highest reached: its
+  //      banners follow the card); a build finished (its REVEAL follows); the auctions sold. It reads the tally every frame (an absence
+  //      while it is up adds to it). A tap anywhere, Enter or Esc closes it once TAP_ARM s have passed: the tally seen and saved, then the
+  //      LEVEL UP banners. THE COIN METER (the lead's 1c): held at the old total on the title and in the room until the card opens (the
+  //      title's minutes would roll it up unseen), then it ticks up under the card — the money arriving (awayHold, the HUD's wrap below)
+  const AWAY = { t0: 0, lines: [], over: [], box: null, W: 252, TW: 25, TH: 32, ROLL: 0.4 };   // (opened at TIME t0; what it says and its rect: the tests read them. W: THE RATING's width; a piece's tile; ROLL: s the meter waits once it is up)
+  function awayDue() { return !!SHOP.awayTally(); }
+  function awayOpen() { AWAY.t0 = TIME; AWAY.lines = []; AWAY.box = null; const v = awayView(), sold = SHOP.awaySold(); if (!v) return; AUDIO.sfx('page'); if (v.coins > 0) AUDIO.sfx('coins', { vol: 0.5 }); if (sold.length) AUDIO.sfx('gavel', { vol: 0.6 }); }   // (sold: auctions that ended while you were away, not yet announced at a station — their gavel)
+  function awayUpdate() {
+    const v = awayView();
+    if (!v) { awayClose(null); return false; }   // (a tally with nothing to show: seen at once, no card)
+    if (TIME - AWAY.t0 < TAP_ARM) { IN.click = false; IN.offTap = false; return true; }   // (the tap or the key that brought you here does not close it)
+    if (IN.pressed('cancel') || IN.pressed('confirm') || IN.click || IN.offTap) { IN.click = false; IN.offTap = false; AUDIO.sfx('ui_back'); awayClose(v); return false; }
+    return true;
+  }
+  function awayDraw() {
+    const v = awayView(); if (!v) return;
+    const w = AWAY.W, x = (W - w) >> 1, cx = x + (w >> 1), rows = [], lines = [], over = [];
+    const say = (s, xx, y, col, font, sc = 1, al = 1) => { lines.push(s); const tw = textW(s, font, sc); if (al === 1 ? tw > w - 8 : xx + tw > x + w - 4) over.push(s); textO(s, xx, y, col, C.UI0, font, sc, al); };   // (over: a line wider than the card — the layout lint reads it)
+    const sep = () => { if (rows.length > 1 && !rows[rows.length - 1].sep) rows.push({ h: 7, sep: true, draw: (y) => hline(x + 6, x + w - 7, y + 3, C.UI3) }); };
+    rows.push({ h: 13, draw: (y) => say(T('WHILE YOU WERE AWAY'), cx, y, C.Y6, FONT_M) });
+    if (v.coins > 0) rows.push({ h: 19, draw: (y) => say(TF('+{money}', { money: fmtMoney(v.coins) }), cx, y + 1, C.Y6, FONT_M, 2) });   // (1b: the headline — the coins, first)
+    if (v.coins > 0 && v.sold > 0) rows.push({ h: 9, draw: (y) => say(v.sold === 1 ? T('THE SHOPKEEPER SOLD 1 PIECE') : TF('THE SHOPKEEPER SOLD {count} PIECES', { count: v.sold }), cx, y, C.CRM0, FONT_S) });
+    const T0 = awayTiles(v, w - 16);
+    if (T0.n || v.stars.length) sep();
+    if (T0.n) rows.push({ h: AWAY.TH + 4, draw: (y) => { let tx = cx - (T0.w >> 1); for (const k of T0.shown) { awayTile(k, tx, y); tx += AWAY.TW + 3; } if (T0.more) say(TF('+{count} MORE', { count: T0.more }), tx + 3, y + (AWAY.TH >> 1) - 2, C.CRM1, FONT_S, 1, 0); } });
+    if (v.stars.length) rows.push({ h: 10, draw: (y) => { const n = Math.max(v.sold, v.stars.length), s = n === 1 ? T('1 REVIEW') : TF('{count} REVIEWS', { count: n }), mean = v.stars.reduce((a, b) => a + b, 0) / v.stars.length, sw = 40 + textW(s, FONT_S), sx = cx - (sw >> 1);
+      PROTO.starRow(sx, y, mean); say(s, sx + 40, y + 1, C.CRM1, FONT_S, 1, 0); } });
+    const more = [];
+    if (v.ups.length) more.push([TF('LEVEL {lvl}!', { lvl: Math.max(...v.ups) }), C.Y6]);
+    for (const b of v.built.slice(0, 3)) { const t = SHOP.trackOf(b.id), o = { name: T(t.name), lvl: b.L | 0 }; more.push([t.pl ? TF('THE {name} ARE BUILT: LEVEL {lvl}', o) : TF('THE {name} IS BUILT: LEVEL {lvl}', o), C.CRM1]); }   // (pl: PATRONS, MIXING TRAYS)
+    if (v.parcels > 0) more.push([v.parcels === 1 ? T('AN AUCTION SOLD: PACK IT AT THE NOTEBOOK') : TF('{count} AUCTIONS SOLD: PACK THEM AT THE NOTEBOOK', { count: v.parcels }), C.CRM1]);
+    if (more.length) { sep(); for (const [s, c] of more) rows.push({ h: 9, draw: (y) => say(s, cx, y, c, FONT_S) }); }
+    const h = 5 + rows.reduce((a, r) => a + r.h, 0) + 3, y0 = VT + ((VB - VT - h) >> 1), y = y0 + Math.round((1 - EASE.outBack(clamp((TIME - AWAY.t0) / CARD.IN, 0, 1))) * 8);   // (the cards' settle: 8 px under, eased in)
+    remapRect(0, VT, W, VB - VT, DARK[2]);
+    rect(x, y, w, h, C.UI1); rectb(x, y, w, h, C.UI0); rectb(x + 1, y + 1, w - 2, h - 2, C.Y5);
+    let yy = y + 5; for (const r of rows) { r.draw(yy); yy += r.h; }
+    AWAY.lines = lines; AWAY.over = over; AWAY.box = [x, y0, w, h];
+  }
+  /** the tally as the card shows it — any field an older or broken save left out reads as nothing — or null: nothing to show */
+  function awayView(t = SHOP.awayTally()) {
+    if (!t || typeof t !== 'object' || Array.isArray(t)) return null;
+    const num = (q) => (Number.isFinite(+q) && +q > 0 ? Math.round(+q) : 0), arr = (q) => (Array.isArray(q) ? q : []);
+    const v = { coins: num(t.coins), sold: num(t.sold), parcels: Math.min(num(t.parcels), G.S && Array.isArray(G.S.orders) ? G.S.orders.length : 0),   // (the auctions: only while a parcel still waits — packed at the notebook first, no line)
+      stars: arr(t.stars).map(Number).filter((s) => s >= 1 && s <= 5),
+      pieces: arr(t.pieces).filter((p) => p && typeof p === 'object' && figOf(p.fig) && Array.isArray(p.c) && p.c[0] && p.c[1]),
+      ups: arr(t.ups).map((L) => L | 0).filter((L) => L > 1),
+      built: arr(t.built).filter((b) => b && typeof b === 'object' && SHOP.trackOf(b.id) && (b.L | 0) >= 1) };
+    return v.coins || v.sold || v.parcels || v.ups.length || v.built.length ? v : null;
+  }
+  /** the pieces' row in maxW px: the tiles whose look is ready (a theme on its way: left out), as many as fit beside +n MORE → { shown:
+   *  [the pieces], n, more, w: the row's width } */
+  function awayTiles(v, maxW) {
+    const ready = v.pieces.filter((p) => !PROTO.looks(p, 'mini').L.pending), tw = AWAY.TW + 3;
+    let n = ready.length, more = Math.max(0, v.sold - n);
+    const wOf = (k, m) => k * tw - 3 + (m ? 6 + textW(TF('+{count} MORE', { count: m }), FONT_S) : 0);
+    while (n > 0 && wOf(n, more) > maxW) { n--; more++; }
+    return { shown: ready.slice(0, n), n, more: n ? more : 0, w: n ? wOf(n, more) : 0 };
+  }
+  /** a sold piece's tile at (x, y): its mini (the shelf's sprite, its own paints) on a dark tile rimmed in its rarity's colour */
+  function awayTile(p, x, y) {
+    const f = figOf(p.fig), lk = PROTO.looks(p, 'mini'), L = lk.L, tw = AWAY.TW, th = AWAY.TH;
+    rect(x, y, tw, th, C.UI2); rectb(x, y, tw, th, PROTO.rcol(f ? f.rar : 0));
+    if (!L.pending) PROTO.blitClip(lk.cv, x + ((tw - L.w) >> 1), y + th - 2 - L.h, x + 1, y + 1, tw - 2, th - 2);
+  }
+  /** the card closed: the tally seen (its coins long in your money) and saved, then its levels' banners */
+  function awayClose(v) {
+    SHOP.awaySeen(); G.save();
+    if (v && v.ups.length) HDUI.levelUp(v.ups);
+  }
+  /** the away coins the coin meter keeps back (1c): on the title and in the room — where the card is next — until the card is up and
+   *  settled (the fade from the title over, AWAY.ROLL s on), so the money arrives where you see it; at a station the money shows as it
+   *  comes (you spend it there) */
+  function awayHold() {
+    if (typeof Scenes === 'undefined' || (Scenes.id !== 'room' && Scenes.id !== 'title')) return 0;
+    if (NOTICE.k === 'away' && !Scenes.transitioning() && TIME - AWAY.t0 >= AWAY.ROLL) return 0;
+    const t = SHOP.awayTally(), c = t && typeof t === 'object' ? Math.round(+t.coins || 0) : 0; return c > 0 ? c : 0;
+  }
+  // the coin figure: never past the old total while the card's coins are held (and never pulled down to fake it: what you spend shows)
+  { const up0 = HUD.update; HUD.update = function () { const k = G.S ? awayHold() : 0; if (!k) return up0.call(this);
+    const m = G.S.money, lo = Math.max(0, m - k), d = (this.shown < lo ? lo : this.shown > m ? m : this.shown) - this.shown;
+    if (d) this.shown += Math.sign(d) * Math.min(Math.abs(d), Math.max(1, Math.floor(Math.abs(d) * 0.12))); if (this.flashT > 0) this.flashT--; }; }
+  if (typeof DEV !== 'undefined') DEV.away = { AWAY, awayView, awayTiles, awayHold };   // (the AWAY lane's tests)
+  // ---- A FINISHED BUILD in the room (the BUILD lane): its REVEAL (SHOP.revealNext(): due → open → a tick → its picture, at the start
+  //      of the room's draw → its draw — the UPGRADES board's card), and the build under way at its upgrade's spot (buildMark: show = the
+  //      room is up, as the badges; lit: the lit station). STUBS in the setup
+  //      ROUND 25 (the owner: "the bigger upgrades take real time to build"; the BUILD lane, DESIGN B6-B7): THE REVEAL AT THE FINISH — a
+  //      build done while you are in the room opens its card at once, one waiting since you were at a station when you are back (after
+  //      the away card): the UPGRADES board's own card (src/62_proto.js PROTO.revealCard / instPic / updInst / drawInst: the room's
+  //      picture round the upgrade, what changed ringed, armed TAP_ARM s, a tap, Enter or Esc closes it — then the shopkeeper walks
+  //      over to admire it: OWNER.built). Its picture BEFORE is the room as it still is in the card's first frame; the room is then
+  //      dressed anew at once (init(): one frame of work, ~45 ms on a phone, as the card opens — the call: kept in one frame, the
+  //      card's opening covers it). A REVEAL that WAITED (a station, a customer's card, away) finds the room dressed anew already: it
+  //      is dressed once more as it was at the card's opening (redressBefore — the integration: one extra build), then the same picture
+  //      before and the same ring. THE BUILD UNDER WAY shows at its upgrade's spot: the BUILD BADGE (buildMark), the status badges'
+  //      house style — the dark backing (one step darker than theirs: it sits on the window's sky and the busy shelves too), a thin LIGHT
+  //      GREY border (UI4 — not the yellow that means something to do: a build asks nothing of you; UI0, the contract's first idea, was
+  //      lost on the dark window and the shelves at 3x), yellow while the UPGRADES board is lit (it opens it), a hammer and a 10 x 2 bar
+  //      of the time done, no word — and while he works on it (OWNER.working) each of his three hits sounds and throws a few chips and a
+  //      puff of dust at the badge
+  const RVL = { I: null, R: null, wk: -1, hit: 0, bk: null, all: null };
+  function revealDue() { return !!SHOP.revealNext(); }
+  function revealOpen() {
+    const r = SHOP.revealNext(); RVL.I = null; if (!r || !SHOP.trackOf(r.id)) return;
+    RVL.I = PROTO.revealCard(r.id, r.L, PROTO.roomBefore(r.id, r.L) || redressBefore(r.id, r.L), true);
+    AUDIO.sfx('sparkle', { vol: 0.8 });
+  }
+  /** ROUND 25, the integration: A REVEAL THAT WAITED — its build finished at another station, behind a customer's card, a banner or THE
+   *  MENU, or while you were away (the common case now that builds take real time) — finds the room dressed anew already: no picture
+   *  BEFORE, so no ring round what changed (round 17, the owner: "when buying an upgrade the upgrade should visually pop up so that i
+   *  can see the gfx of what it looks like"). Here the room is dressed ONCE more as it was — the level before (G.S.up[id] = L - 1 for
+   *  that moment, restored at once) with its tier materials — so the card takes its picture before as at a build's end in the room
+   *  (instPic), and the room's draw dresses it anew right after: one extra build, at the card's opening (behind it); nothing a frame →
+   *  true when the room is now as it was (a level the save no longer records, or one that brings no new look: false, the plain picture) */
+  function redressBefore(id, L) {
+    const S = G.S; if (!S || !S.up || (S.up[id] | 0) !== L || !(L >= 1) || SHOP.building() && SHOP.building().id === id) return false;
+    if (typeof DRESS !== 'undefined' && DRESS.lookOf && DRESS.lookOf(id, L).fresh === false) return false;
+    S.up[id] = L - 1;
+    try { if (typeof ROOMS !== 'undefined') ROOMS.apply(); init(); } finally { S.up[id] = L; }   // (the tier materials stay the old ones until instPic's picture before is taken: it applies the new ones)
+    return PROTO.roomBefore(id, L);
+  }
+  function revealUpdate() {
+    const I = RVL.I; if (!I) { if (SHOP.revealNext()) SHOP.revealDone(); return false; }
+    if (PROTO.updInst(I)) return true;
+    RVL.I = null; SHOP.revealDone(); G.save();
+    if (typeof OWNER !== 'undefined' && OWNER.built) OWNER.built(I.id);   // (he walks over to admire it)
+    return false;
+  }
+  /** (the room's draw, first) the REVEAL's picture; and a build that ended since the last frame brings its tier materials (COUNTER 3's
+   *  marble …) — after the picture before, which is the room as it was */
+  function revealPic() {
+    const I = NOTICE.k === 'reveal' ? RVL.I : null;
+    if (I && I.view && !I.pic && typeof ROOMVIEW !== 'undefined') PROTO.instPic(I, true);
+    const b = G.S ? SHOP.building() : null;
+    if (b !== RVL.bk) { RVL.bk = b; if (typeof ROOMS !== 'undefined' && !(I && I.before === 'due')) ROOMS.apply(); }   // (the build record itself: a new one at a purchase, none at its end)
+  }
+  function revealDraw() { if (RVL.I) PROTO.drawInst(RVL.I); }
+  /** where each capped track's BUILD BADGE goes, [its middle x, its top row] (frame px), placed as the status badges were: clear of
+   *  every head at every still spot (the shopkeeper's, the customers' at the glass), the trophies on the sill, the sign at every level
+   *  and the other badges (the letters [240, 65], the pin [53, 48], the parcels [268, 147]) */
+  //  (the window's panes hold the sign and the trophies, the bench the shopkeeper's head: SHOP SIGN, SHOP WINDOW and SUPPLIER share the
+  //  wall at the window's left frame, under the pin — one build at a time, so never two badges there; SHELF SPACE the display shelf's
+  //  empty panel under its top shelf; PATRONS the commission board's top frame; MIXING TRAYS the wall right of the board, over the
+  //  interior's little shelf; WEBSHOP the notebook desk's front, left of the parcels; the EXPLORATION CORNER high on the glass of the
+  //  case's wild end; the COUNTER the case's front rail, right of centre)
+  const BUILD_AT = { sign: [47, 60], window: [47, 60], supplier: [47, 60], lights: [163, 46], board: [214, 22], table: [257, 78], web: [234, 146], tea: [40, 112], counter: [196, 152] };
+  const BUILD_W = 22;   // (the backing's width: the hammer, a gap, the bar; its border a pixel round it — 24 x 10)
+  /** the build badge's hammer (7 x 6: a steel head, an oak handle) */
+  const BUILD_ICON = { rows: ['.SSs...', 'SSSSs..', '.SssW..', '...Ww..', '....Ww.', '.....w.'], pal: { S: 'STL6', s: 'STL4', W: 'WOD5', w: 'WOD3' } };
+  /** the work's hits (B6): at these seconds into his work pose, three, then none */
+  const WORK_HITS = { at: 0.35, every: 0.7, n: 3 };
+  /** the build under way at its upgrade's spot (show: the room is up, as the badges; lit: the lit station — the UPGRADES board's lights
+   *  it) → RVL.R, its whole drawn rect (a tap there opens the board: stationAt0), else null */
+  function buildMark(show, lit) {
+    RVL.R = null;
+    const b = G.S ? SHOP.building() : null;
+    if (b) workHits(b, show);
+    if (!show) return;
+    if (RVL.all) { for (const id of RVL.all) if (!b || b.id !== id) buildBadge(id, 0.4, lit); }   // (RVL.all: every track's badge at once — the pictures that place them)
+    if (b && BUILD_AT[b.id]) RVL.R = buildBadge(b.id, Math.max(0, Math.min(1, 1 - SHOP.buildLeft(Date.now()) / b.dur)), lit);
+  }
+  /** a build badge at track id's place, k of it done → its whole drawn rect */
+  function buildBadge(id, k, lit) {
+    const at = BUILD_AT[id], x0 = Math.round(at[0] - BUILD_W / 2), y = at[1], on = !!lit && lit.key === 'board', f = Math.round(10 * k);
+    remapRect(x0, y - 1, BUILD_W, 8, DARK[4]); rectb(x0 - 1, y - 2, BUILD_W + 2, 10, on ? C.Y5 : C.UI4);
+    badgeIcon(BUILD_ICON, x0 + 2, y);
+    rect(x0 + 10, y + 2, 10, 2, C.UI3); if (f > 0) { rect(x0 + 10, y + 2, f, 2, C.Y5); hline(x0 + 10, x0 + 9 + f, y + 2, C.Y6); }
+    return [x0 - 1, y - 2, BUILD_W + 2, 10];
+  }
+  /** his hits while he works on the build (OWNER.working: { id, t, n0 }): the hammer, and at the badge a few chips and a puff */
+  function workHits(b, show) {
+    const w = typeof OWNER !== 'undefined' && OWNER.working ? OWNER.working() : null; if (!w || w.id !== b.id) return;
+    if (RVL.wk !== w.n0) { RVL.wk = w.n0; RVL.hit = 0; }
+    while (RVL.hit < WORK_HITS.n && w.t >= WORK_HITS.at + WORK_HITS.every * RVL.hit) {
+      RVL.hit++; AUDIO.sfx('hammer', { vol: 0.35 });
+      const at = BUILD_AT[b.id]; if (!show || !at || typeof PFX === 'undefined') continue;
+      PFX.burst(PK.CHIP, at[0] + 5, at[1] + 2, 3, 0.9, 24, C.WOD3, 1, at[1] + 10, 0.8); PFX.burst(PK.SMOKE, at[0] + 5, at[1] + 1, 2, 0.25, 34, undefined, 1);
+    }
+  }
+  Object.assign(ROOM, { BUILD_AT, BUILD_W, BUILD_ICON, WORK_HITS, build: RVL, revealPic, buildMark });   // (ROUND 25, the BUILD lane: for the tests and the pictures)
   // ---- ROUND 24 (Alex, 2026-10-18: "customers now walk in the shop … 3-5% chance that a customer enters negotiation and wants to
   //      buy a figure that is stored on the shelf … a ! appears above their head … the commission quests are also now delivered by
   //      the customers themselves, this time a ? pops up"): THE LIVING SHOP, the room's side (DESIGN_SHOP_LIFE §3.9, §4.4, §5.2,
@@ -16738,7 +17228,8 @@ const CAST = (() => {
    &ownersize=<x> &ownerlook=<name> (a cast's manifest looks: dark for 'f', design for 'm'; kraft either) &ownerlog=1
    &ownerlegs=0 (his own walks straight, as dirOf picks: to compare) &ownerlinger=<s> (the linger's quiet time fixed at s, then
    home: tests, A/B) (&ownerbox=1: a box where the art or the renderer is missing) (&castload=fail|<s>: src/73_cast.js).
-   Exposes OWNER = { on, enter, update, walk, draw, tap, st, pos, waiting, serve, serving, paid, keeperRow, keeperDraw, keeperTap } and DEV.owner.
+   Exposes OWNER = { on, enter, update, walk, draw, tap, st, pos, waiting, serve, serving, paid, keeperRow, keeperDraw, keeperTap, built, working, WORK,
+   WORK_T } and DEV.owner.
    ============================================================================= */
 const OWNER = (() => {
   'use strict';
@@ -17217,15 +17708,23 @@ const OWNER = (() => {
     let n = 0; for (const id of LEGS) n += ((G_.pile && G_.pile[id]) | 0) + ((G_.col && G_.col[id] && G_.col[id].n) | 0);
     return n;
   }
+  /** ROUND 25 (REAL-TIME BUILDS, B10): the levels IN EFFECT (SHOP.up — a capped track's level counts from its build's end), and the
+   *  build under way: he admires an upgrade when it is there, not when it is bought */
   function snapshot() {
-    const G_ = GS(); if (!G_) return null; const st = G_.stats || {};
-    return { lvl: SHOP.lvl(), sold: st.sold | 0, perfect: st.perfect | 0, rateN: G_.rateN | 0, packs: G_.packs | 0, legs: legendaries(), painted: G_.painted | 0, mw: st.mw | 0, up: Object.assign({}, G_.up || {}), t: TIME };
+    const G_ = GS(); if (!G_) return null; const st = G_.stats || {}, up = {}, b = SHOP.building ? SHOP.building() : null;
+    for (const t of SHOP.TRACKS) up[t.id] = SHOP.up(t.id);
+    return { lvl: SHOP.lvl(), sold: st.sold | 0, perfect: st.perfect | 0, rateN: G_.rateN | 0, packs: G_.packs | 0, legs: legendaries(), painted: G_.painted | 0, mw: st.mw | 0, up, bld: b ? b.id + ':' + b.L : '', t: TIME };
   }
   function moodOf(s) {
     const G_ = GS(); if (!s || !G_) return null; const L = SHOP.lvl();   // (round 24: no 'sale' or 'perfect' mood on the return any more — customers buy on their own all the time now; he nods at each one in the room)
     if (L > s.lvl && L > (S.cheeredLvl | 0)) return { k: 'level' };
     if (legendaries() > s.legs) return { k: 'legendary' };
-    if (TIME - s.t <= 120) for (const id in (G_.up || {})) if ((G_.up[id] | 0) > (s.up[id] | 0) && ADMIRE[id]) return { k: 'upgrade', track: id };
+    if (TIME - s.t <= 120) {   // (ROUND 25: an upgrade there now — not one whose REVEAL still waits for the room: its closing calls him over, built();
+      //                         a build begun there: over to work on it, the purchase's first visit — admireRoute)
+      const waits = (id) => (G_.reveal || []).some((r) => r && r.id === id), b = SHOP.building ? SHOP.building() : null;
+      for (const t of SHOP.TRACKS) if (SHOP.up(t.id) > (s.up[t.id] | 0) && ADMIRE[t.id] && !waits(t.id)) return { k: 'upgrade', track: t.id };
+      if (b && s.bld !== b.id + ':' + b.L && ADMIRE[b.id]) return { k: 'upgrade', track: b.id };
+    }
     if ((G_.painted | 0) > s.painted) return { k: 'painted' };
     const n = (G_.rateN | 0) - s.rateN, rs = G_.rates || [];
     if (n > 0 && rs.slice(-Math.min(n, rs.length)).some((e) => e && e.k === 'c' && SHOP.WORDS && (e.y === SHOP.WORDS.noes || e.y === SHOP.WORDS.notleg))) return { k: 'noes' };
@@ -17403,8 +17902,10 @@ const OWNER = (() => {
   /** ROUND 24 (DESIGN_SHOP_LIFE §8.2): someone waits for you = a "!" or "?" mark is up (SHOP.waiter) — customers who only browse
    *  wait for nobody (rounds 18-23: anyone in the queue, which was nearly always) */
   const waiting = () => { try { return typeof SHOP !== 'undefined' && typeof SHOP.waiter === 'function' && !!SHOP.waiter(); } catch (e) { return false; } };
-  /** over to the upgrade you bought: a look at it (1.5 s), home, the glasses push (§5.5 #12) */
+  /** over to the upgrade you bought: a look at it (1.5 s), home, the glasses push (§5.5 #12). ROUND 25: its build under way — he works
+   *  on it there (workRoute) */
   function admireRoute(track) {
+    { const b = SHOP.building ? SHOP.building() : null; if (b && b.id === track && WORK[track]) { workRoute(track); return; } }
     const [spot, dir] = ADMIRE[track] || ['home', '']; log('admire', track, 'at', spot);
     if (spot === 'home') { walkHome(); return; }   // (the COUNTER's: the mood's glasses at home)
     const s = Array.isArray(spot) ? spot : SP()[spot]; setMode('REACT'); S.own = true;
@@ -17421,7 +17922,43 @@ const OWNER = (() => {
     hum: { ok: () => true, spot: 'home', pose: 'hum', dur: 4 },
     // TIDY THE CASE (GLASS COUNTER §3.3): an empty shop only — behind its wild end, a look down into it (admire_s), a stand, home
     corner: { ok: () => !custIn(), at: CASE_END, pose: 'admire', dir: 's', dur: 1.5 },
+    // ROUND 25 (B6): WORK ON THE BUILD under way — an empty shop only, while a capped track is being built: at its spot (WORK), its
+    // loop for WORK_T s (the room plays the hammer's hits and their chips: working()), home. Its place read as the errand starts (a
+    // build that ends on his way leaves him the place he set off for)
+    build: { ok: () => { const b = SHOP.building ? SHOP.building() : null; return !!b && !!WORK[b.id] && !custIn(); },
+      get spot() { const w = workNow(); return w && !Array.isArray(w[0]) ? w[0] : undefined; }, get at() { const w = workNow(); return w && Array.isArray(w[0]) ? w[0] : undefined; },
+      get pose() { const w = workNow(); return w ? w[1] : 'stand'; }, get dir() { const w = workNow(); return (w && w[2]) || ''; }, get dur() { return WORK_T; } },
   };
+  // ---- ROUND 25 (REAL-TIME BUILDS, the BUILD lane; B6): HIM AT WORK ON A BUILD — where and how (existing frames only: a spot's own loop,
+  //      or admire_s): the tracks admired at the bench (SHOP SIGN, SHOP WINDOW, SUPPLIER) with his brush there; SHELF SPACE arranging the
+  //      display shelf; PATRONS and MIXING TRAYS at the wall; WEBSHOP packing at the notebook; the EXPLORATION CORNER behind the case's
+  //      wild end, the COUNTER at home (a look down into the glass, admire_s). Right after the purchase (the mood you bring back from
+  //      the board: admireRoute → workRoute), then as the errand above. The room hears and sees each hit (src/63_room.js: working())
+  const WORK_T = 2.6;
+  const WORK = { sign: ['bench', 'paint'], window: ['bench', 'paint'], supplier: ['bench', 'paint'], lights: ['cabinet', 'arrange'], board: ['wall', 'board'], table: ['wall', 'board'], web: ['notebook', 'pack'], tea: [CASE_END, 'admire', 's'], counter: ['home', 'admire', 's'] };
+  let WK = null;   // (the work last read: an errand on its way keeps it if its build ends meanwhile)
+  const workNow = () => { const b = SHOP.building ? SHOP.building() : null; if (b && WORK[b.id]) WK = WORK[b.id]; return WK; };
+  /** the purchase's first visit: over to the build, its work there (as the errand does it), home — the mood's glasses push there */
+  function workRoute(id) {
+    const [at, pose, dir] = WORK[id], s = Array.isArray(at) ? at : SP()[at]; if (!s) { walkHome(); return; }
+    log('work', id, 'at', Array.isArray(at) ? 'floor' : at); setMode('REACT'); S.own = true;
+    const work = S.workAct = POSEA(pose, Array.isArray(at) ? { dir, dur: WORK_T } : { dir, dur: WORK_T, loop: true }), face = Array.isArray(at) ? () => faceFor(dir || 's', s[0], s[1]) : s[2];
+    run([...go([s[0], s[1]], 'walk', face, { name: Array.isArray(at) ? 'floor' : at }), work], () => { S.own = false; S.workAct = null; walkHome(); });
+  }
+  /** him at work on the build under way now — { id, t: s into his work pose, n0: the tick it began } — else null (the room's hits) */
+  function working() {
+    if (!live() || FORCE) return null;
+    const a = S.act, b = SHOP.building ? SHOP.building() : null, w = b && WORK[b.id]; if (!a || !a.pose || !w || a.pose !== w[1]) return null;
+    if (!(a === S.workAct || (S.mode === 'ERRAND' && S.lastErrand === 'build'))) return null;
+    return { id: b.id, t: a.t, n0: S.n - a.n };
+  }
+  /** ROUND 25 (B7): a build's REVEAL closed in the room — he walks over to admire it when he is free (as the mood does after an instant
+   *  upgrade: there, a look, home, the glasses push), else nothing */
+  function built(id) {
+    if (!live() || FORCE || !ADMIRE[id] || custIn() || S.sv || S.pinJob || (S.W && !S.W.fired) || ['TASK', 'SERVE', 'DEMO', 'FORCED'].includes(S.mode)) return;
+    log('built', id); S.settled = false; S.settleK = ''; S.mood = { k: 'upgrade', track: id };
+    admireRoute(id);
+  }
   /** the next errand from the bag ('' when there is none but the last one); not: errands left out this time (the act he just did);
    *  anyone in: only one at home */
   function pickErrand(not) {
@@ -17924,6 +18461,7 @@ const OWNER = (() => {
     pos: () => (live() && (S.drawn || !drawable()) ? [S.rx, S.rz] : null), waiting,   // (round 24: where LIFE sorts him among the customers; a "!" or "?" up)
     serve: safe(serve, false), serving: safe1(serving), paid: safe(paid),   // (GLASS COUNTER: the serve with LIFE, the room's pay cue)
     keeperRow: safe(keeperRow, 0), keeperDraw: safe(keeperDraw), keeperTap: safe(keeperTap, false),
+    built: safe(built), working: safe1(working), WORK, WORK_T,   // (ROUND 25, the BUILD lane: a build's REVEAL closed in the room — his admire; him at work on a build — the room's hits)
     _S: S, _route: route, _clampFloor: clampFloor, _unproject: unproject, _covers: safe(covers, 0), _dirOf: (h, x, z) => dirOf(h, x, z).slice(), _anim: anim };
 })();
 if (typeof DEV !== 'undefined') DEV.owner = OWNER;
