@@ -15597,6 +15597,13 @@ const PROTO = {};
   //      answered in the room, on their own card. Rounds 7-21's customer at the counter — the portrait, MY ORDER, PURSE, the four
   //      plaques, MATCH and its pop-up, SHELF, NOT TODAY — is gone: the "!" card carries the haggle now (src/63_room.js THE OFFER)
   function enterSell() { P.sellSel = -1; P.dis = 0; P.backPg = 0; go('sell'); }
+  /** RUP (plan 2.4, ?rehaul=1): a tap on a piece in THE SHOP WINDOW opens THE COUNTER's stock with that piece picked — a back-room piece: THE BACK ROOM, it chosen (P.backSel;
+   *  confirm puts it on the counter); a counter piece: its pad chosen. k = its index in G.S.stock (src/75_rh_states.js tapEx) */
+  function stockPick(k) {
+    const n = slotsN(), st = G.S.stock; if (!(k >= 0 && k < st.length)) return;
+    if (k < n) { P.sellSel = k; return; }
+    P.backSel = k - n; P.backPg = Math.floor(P.backSel / BACK_PER); go('back');
+  }
   const slotsN = () => SHOP.counterSlots();
   const sellList = () => G.S.stock;   // (the counter's pieces first, then the back room's)
   const sellN = () => Math.max(0, Math.min(slotsN(), G.S.stock.length));
@@ -15701,22 +15708,34 @@ const PROTO = {};
   function revealCard(id, L, was, built) {
     const t = SHOP.trackOf(id), RV = ROOMV();
     // SW1: WEBSHOP's card in the new look (MY SHOP, ?rehaul=1): the picture is the NEW engine's room at THE NOTEBOOK desk's cubby, BEFORE (L - 1) and AFTER (L), composed by src/75_rh_web.js: no old room, no waiting for one
-    const rh = id === 'web' && rhWeb();
+    // RUP: every track on its states and the light places (THE COUNTER, SHELF SPACE) the same, the room composed by src/75_rh_states.js cardPic (the crop centred on the place)
+    const rh = (id === 'web' && rhWeb()) || rhState(id);
     return { id, L, t: 0, title: TF('{name} · LEVEL {lvl}', { name: T(t.name), lvl: L }), line: SHOP.fxLine(id, L), look: typeof DRESS !== 'undefined' && DRESS.lookOf ? DRESS.lookOf(id, L) : { fresh: true, next: 0 },
       view: rh ? [0, 0, 128, 60] : RV ? RV.viewOf(id, L) : null, pic: null, picT: 0, before: was && !rh ? 'due' : null, mark: null, built: !!built, rh };
   }
+  /** RUP: the room-upgrade states module when the new look draws track id's card (src/75_rh_states.js cardOn: MY SHOP, ?rehaul=1, no room theme on), else null */
+  const rhState = (id) => (typeof REHAUL !== 'undefined' && REHAUL.on && REHAUL._p.states && REHAUL._p.states.cardOn && REHAUL._p.states.cardOn(id) && !(typeof ROOMS !== 'undefined' && ROOMS.active && ROOMS.active()) ? REHAUL._p.states : null);
+  /** the module that composes card I's pictures (WEBSHOP's, or the states') */
+  const rhMod = (I) => (I.id === 'web' ? REHAUL._p.web : REHAUL._p.states);
   /** SW1: the WEBSHOP module when the new look draws MY SHOP (?rehaul=1, no room theme on), else null */
   const rhWeb = () => (typeof REHAUL !== 'undefined' && REHAUL.on && REHAUL._p.web && REHAUL._p.web.ready() && !(typeof ROOMS !== 'undefined' && ROOMS.active && ROOMS.active()) ? REHAUL._p.web : null);
   /** SW1: WEBSHOP's reveal pictures: BEFORE and AFTER from the room's caches (the cubby composed fresh for each level), the ring from their difference, the cues under 'sparkle'; false while the room is not built */
   function rhPic(I) {
-    const W = rhWeb(), RM_ = REHAUL._p.room; if (!W || !RM_ || I.pic) return;
-    const b = RM_.webCrop(I.L - 1), a = RM_.webCrop(I.L); if (!a || !b || a.miss || b.miss) return;   // (the room's caches not built yet, or a piece's figure on its way: next frame)
-    I.mark = I.look && I.look.fresh === false ? null : W.ringOf(b, a); I.pic = a; I.picT = I.t; W.reveal(I, a); W.revealSound(I.L);
+    if (I.pic) return;
+    // RUP: BEFORE (L - 1) and AFTER (L), the room composed on the whole canvas for each (src/75_rh_states.js cardPics: a narrow window or a card at the boot drew only the cover's part)
+    if (I.id !== 'web') {
+      const S = rhState(I.id); if (!S) return;
+      const q = S.cardPics(I.id, [I.L - 1, I.L]); if (!q || q[0].miss || q[1].miss) return;   // (the room not built yet, or a piece's figure on its way: next frame)
+      const [b, a] = q; I.mark = I.look && I.look.fresh === false ? null : S.ringOf(b, a); I.pic = a; I.picT = I.t; I.rhK = a.k; S.reveal(I, a); S.revealSound(I.id, I.L); return;
+    }
+    const W = rhWeb(), S = REHAUL._p.states; if (!W || !S || !S.cardPics) return;
+    const q = S.cardPics('web', [I.L - 1, I.L], W.BOXES.crop, 2); if (!q || q[0].miss || q[1].miss) return;   // (WEBSHOP's spec crop, 2 x 2)
+    const [b, a] = q; I.mark = I.look && I.look.fresh === false ? null : W.ringOf(b, a); I.pic = a; I.picT = I.t; I.rhK = 2; W.reveal(I, a); W.revealSound(I.L);
   }
   /** SW1: the ring round the art px that differ, in the card: a pixel off the box, gold, blinking its first MARK.blink s, then every other pixel of it (markRing's, at 4/3 frame px a crop px: each crop px is 2 x 2 art px) */
-  function markRingRh(M, px, py, vw, vh, f, cx, cy, cw, ch) {
+  function markRingRh(M, px, py, vw, vh, f, cx, cy, cw, ch, K = 2) {
     if (f < MARK.blink && ((f * 4) | 0) % 2) return;
-    const k = 4 / 3, [bx, by, bw, bh] = M.box, dots = f >= MARK.blink;
+    const k = K / 1.5, [bx, by, bw, bh] = M.box, dots = f >= MARK.blink;   // (frame px a crop px: K art px a crop px, 1.5 art px a frame px — WEBSHOP's 2 x 2: 4/3; RUP's 1 x 1: 2/3)
     const x0 = px + Math.floor(k * bx) - 2, y0 = py + Math.floor(k * by) - 2, x1 = px + Math.ceil(k * (bx + bw)) + 1, y1 = py + Math.ceil(k * (by + bh)) + 1;
     const k0 = Math.max(px, cx), k1 = Math.max(py, cy); clip(k0, k1, Math.min(px + vw, cx + cw) - k0, Math.min(py + vh, cy + ch) - k1);
     for (let x = x0; x <= x1; x++) if (!dots || !((x - x0) & 1)) { pset(x, y0, C.Y6); pset(x, y1, C.Y6); }
@@ -15881,8 +15900,9 @@ const PROTO = {};
     if (I.rh && I.pic) {   // SW1: WEBSHOP's picture is the ART LAYER's: its box is see-through here (the room's art draws it 2 x 2 art px a crop px; on the UPGRADES board, which has no art of its own, an overlay does)
       rect(px, py, vw, vh, 254); const f = I.t - I.picT;
       if (f < 0.1) remapRect(px, py, vw, vh, DARK[f < 0.05 ? 3 : 2]);
-      else if (I.mark) markRingRh(I.mark, px, py, vw, vh, f - 0.1, x, cy, w, hh);
-      if (typeof Scenes !== 'undefined' && Scenes.id !== 'room' && REHAUL._p.core && REHAUL._p.core.overlay) { const Wb = REHAUL._p.web; REHAUL._p.core.overlay((AB, AW, AH, X0, Y0) => Wb.drawReveal(AB, AW, AH, X0, Y0)); }
+      else if (I.mark) markRingRh(I.mark, px, py, vw, vh, f - 0.1, x, cy, w, hh, I.rhK || 2);
+      const Wb = rhMod(I); if (Wb && Wb.tick) Wb.tick();   // (the reveal's queued cues, wherever the card is up)
+      if (Wb && typeof Scenes !== 'undefined' && Scenes.id !== 'room' && REHAUL._p.core && REHAUL._p.core.overlay) REHAUL._p.core.overlay((AB, AW, AH, X0, Y0) => Wb.drawReveal(AB, AW, AH, X0, Y0));
     } else if (I.pic) {   // the room's own picture, at 2x (round 21's review: a small change at 4x, ringed), coming up out of the dark in a few frames
       const M = I.mark; blit(M && M.pic ? M.pic : I.pic, px, py); const f = I.t - I.picT;
       if (f < 0.1) remapRect(px, py, vw, vh, DARK[f < 0.05 ? 3 : 2]);
@@ -16537,7 +16557,7 @@ const PROTO = {};
     HD.room.scan(ST.key === 'bench' ? R.B : backdrop(ST.key).L); R.scanned = ST.key;
     buildShelf(); for (const m of R.shelf) if (m) m.fade = 1;
     HUD.snap(); P.pops.length = 0; P.miss.length = 0; P.msg = ''; P.msgHold = 0; P.misses = 0; P.holdDbg = 0; P.J = null;
-    if (STX[ST.key]) STX[ST.key](p || {}); else if (ST.key === 'counter') enterSell(); else if (ST.key === 'cabinet') enterCase(); else if (ST.key === 'board') enterPlans(); else if (ST.key === 'comm') enterComm(); else if (ST.key === 'mixer') enterMix(); else enterPick(shop);
+    if (STX[ST.key]) STX[ST.key](p || {}); else if (ST.key === 'counter') { enterSell(); if (p && p.rupPick !== undefined) stockPick(p.rupPick | 0); } else if (ST.key === 'cabinet') enterCase(); else if (ST.key === 'board') enterPlans(); else if (ST.key === 'comm') enterComm(); else if (ST.key === 'mixer') enterMix(); else enterPick(shop);
     if (ST.key === 'mixer' || ST.key === 'bench') finNoteNow();   // (round 21's review: a pot pack's NEW FINISH a reload cut short — at the table or the workbench, once)
     ROOMS.apply(); AUDIO.music(ROOMS.song()); AUDIO.ambience('indoor');
     debugJump(p || {});
@@ -18577,7 +18597,7 @@ const ROOMVIEW = {}, ROOM = {};
         const wc = L && L.waiterAt ? L.waiterAt(x, y) : null;
         if (wc !== null && wc !== undefined && openCard(wc)) { /* the card */ }
         else if (y >= VB && RM.lineWait !== null && RM.lineWait !== undefined && openCard(RM.lineWait)) { /* the bottom line's own "… TAP THE ?": a tap on it answers too (their body not in yet on a slow line, ?life=0) */ }
-        else { const st = stationAt(x, y); if (st) go(st, st.key === 'notebook' && rhOn() && REHAUL._p.web ? REHAUL._p.web.tapEx(x, y) : null); else if (!(L && L.pokeAt && L.pokeAt(x, y)) && typeof OWNER !== 'undefined') OWNER.tap(x, y); }   // OWNER hook 5/10, LIFE hook 3
+        else { const st = stationAt(x, y); if (st) go(st, rhOn() ? rhTapEx(st, x, y) : null); else if (!(L && L.pokeAt && L.pokeAt(x, y)) && typeof OWNER !== 'undefined') OWNER.tap(x, y); }   // OWNER hook 5/10, LIFE hook 3
       }
       else if (IN.offTap) { const st = stripAt(IN.fx, IN.fy); IN.offTap = false; if (st) go(st); }   // (M3: a tap on the furniture beyond the frame: the engine gives no click there)
       // keys: ◀ ▶ walk the stations (round 24: and a waiting "!" or "?" customer, after the counter), Enter goes into the lit one
@@ -19041,8 +19061,18 @@ const ROOMVIEW = {}, ROOM = {};
   // SW1 (WEBSHOP_SPEC section 6): under ?rehaul=1 WEBSHOP's two badges stand where the new desk has room: THE PARCEL BADGE beside THE POST (canvas ~620-656 x 278-292, under the door's foot, clear of the light box),
   // THE BUILD BADGE on the desk's front edge under THE NOTEBOOK (canvas 594-629 x 246-260, 4 px under its lid, 3 px above THE POST). Today's look keeps its own places
   const rhOn = () => typeof REHAUL !== 'undefined' && !!REHAUL && REHAUL.on === true;
-  const RH_BADGE_AT = { notebook: [306, 147] }, RH_BUILD_AT = { web: [288, 126] };
+  // RUP (ROOM_UPGRADE_PLAN rev 1 section 2.4, under ?rehaul=1): the moved places' BUILD BADGES (a badge is 36 x 15 canvas px), each inside the keeper's lane (canvas x 229-609),
+  // clear of every place, head and badge (tools/rehaul/statecheck.mjs): SHOP WINDOW, FINE BRUSHES, DESK LAMP and SHOP INTERIOR share [45, 91] (canvas 229-265, between the
+  // customers' heads at their first two spots, 2 px left of the lamp; one build at a time), SUPPLIER [271, 24] (on UPGRADES' right frame, 8 px from its shelf), PATRONS [218, 22]
+  // (today's [214, 22] overlapped THE DISPLAY SHELF's edge), MIXING TRAYS [250, 78] (today's [257, 78] overlapped his head at THE NOTEBOOK); the rest keep theirs
+  // RUP (the owner's call on checkpoint 1): COMMISSIONS' letters badge [240, 65] covered PATRONS' board at every level (the board grows down and right; the live letters
+  // already show the requests): it stands right over COMMISSIONS' top rail now, [240, 36] (canvas 524-553 x 111-125, 1 row over the board's top) — the nearest spot clear
+  // of every state at every level, every keep-out, people zone and badge (left is THE DISPLAY SHELF, right 25 px to the door, below the paint wall's zone and MIXING TRAYS' badge)
+  const RH_BADGE_AT = { notebook: [306, 147], comm: [240, 36] }, RH_BUILD_AT = { web: [288, 126], window: [45, 91], brush: [45, 91], lamp: [45, 91], shelves: [45, 91], supplier: [271, 24], board: [218, 22], table: [250, 78] };
   const buildAt = (id) => (rhOn() && RH_BUILD_AT[id]) || BUILD_AT[id];
+  /** what a tap at frame px (x, y) asks of station st under ?rehaul=1: THE NOTEBOOK's light box and post (src/75_rh_web.js tapEx), THE COUNTER's stock page with the shop window's piece
+   *  picked (RUP, plan 2.4: src/75_rh_states.js tapEx) — else null */
+  const rhTapEx = (st, x, y) => (st.key === 'notebook' && REHAUL._p.web ? REHAUL._p.web.tapEx(x, y) : st.key === 'counter' && REHAUL._p.states && REHAUL._p.states.tapEx ? REHAUL._p.states.tapEx(x, y) : null);
   const badgeAtOf = (s) => (rhOn() && RH_BADGE_AT[s.key]) || s.badge;
   /** the build badge's hammer (7 x 6: a steel head, an oak handle) */
   const BUILD_ICON = { rows: ['.SSs...', 'SSSSs..', '.SssW..', '...Ww..', '....Ww.', '.....w.'], pal: { S: 'STL6', s: 'STL4', W: 'WOD5', w: 'WOD3' } };
@@ -19076,7 +19106,7 @@ const ROOMVIEW = {}, ROOM = {};
       PFX.burst(PK.CHIP, at[0] + 5, at[1] + 2, 3, 0.9, 24, C.WOD3, 1, at[1] + 10, 0.8); PFX.burst(PK.SMOKE, at[0] + 5, at[1] + 1, 2, 0.25, 34, undefined, 1);
     }
   }
-  Object.assign(ROOM, { BUILD_AT, buildAt, BUILD_W, BUILD_ICON, WORK_HITS, build: RVL, revealPic, buildMark });   // (ROUND 25, the BUILD lane: for the tests and the pictures)
+  Object.assign(ROOM, { BUILD_AT, buildAt, BUILD_W, BUILD_ICON, WORK_HITS, build: RVL, revealPic, buildMark, RH_BUILD_AT, RH_BADGE_AT });   // (ROUND 25, the BUILD lane: for the tests and the pictures)
   // ---- ROUND 24 (Alex, 2026-10-18: "customers now walk in the shop … 3-5% chance that a customer enters negotiation and wants to
   //      buy a figure that is stored on the shelf … a ! appears above their head … the commission quests are also now delivered by
   //      the customers themselves, this time a ? pops up"): THE LIVING SHOP, the room's side (DESIGN_SHOP_LIFE §3.9, §4.4, §5.2,
@@ -21366,7 +21396,7 @@ const OWNER = (() => {
   /** over to the upgrade you bought: a look at it (1.5 s), home, the glasses push (§5.5 #12). ROUND 25: its build under way — he works
    *  on it there (workRoute) */
   function admireRoute(track) {
-    { const b = SHOP.building ? SHOP.building() : null; if (b && b.id === track && WORK[track]) { workRoute(track); return; } }
+    { const b = SHOP.building ? SHOP.building() : null; if (b && b.id === track && workOf(track)) { workRoute(track); return; } }
     const [spot, dir] = ADMIRE[track] || ['home', '']; log('admire', track, 'at', spot);
     if (spot === 'home') { walkHome(); return; }   // (the COUNTER's: the mood's glasses at home)
     const s = Array.isArray(spot) ? spot : SP()[spot]; setMode('REACT'); S.own = true;
@@ -21386,7 +21416,7 @@ const OWNER = (() => {
     // ROUND 25 (B6): WORK ON THE BUILD under way — an empty shop only, while a capped track is being built: at its spot (WORK), its
     // loop for WORK_T s (the room plays the hammer's hits and their chips: working()), home. Its place read as the errand starts (a
     // build that ends on his way leaves him the place he set off for)
-    build: { ok: () => { const b = SHOP.building ? SHOP.building() : null; return !!b && !!WORK[b.id] && !custIn(); },
+    build: { ok: () => { const b = SHOP.building ? SHOP.building() : null; return !!b && !!workOf(b.id) && !custIn(); },
       get spot() { const w = workNow(); return w && !Array.isArray(w[0]) ? w[0] : undefined; }, get at() { const w = workNow(); return w && Array.isArray(w[0]) ? w[0] : undefined; },
       get pose() { const w = workNow(); return w ? w[1] : 'stand'; }, get dir() { const w = workNow(); return (w && w[2]) || ''; }, get dur() { return WORK_T; } },
   };
@@ -21398,11 +21428,16 @@ const OWNER = (() => {
   //      the board: admireRoute → workRoute), then as the errand above. The room hears and sees each hit (src/63_room.js: working())
   const WORK_T = 2.6;
   const WORK = { sign: [CASE_END, 'admire', 'n'], window: ['bench', 'paint'], supplier: ['bench', 'paint'], brush: ['bench', 'paint'], lamp: ['bench', 'paint'], lights: ['cabinet', 'arrange'], board: ['wall', 'board'], table: ['wall', 'board'], shelves: ['wall', 'board'], web: ['notebook', 'pack'], tea: [CASE_END, 'admire', 's'], counter: ['home', 'admire', 's'] };   // (s2's fix round: FINE BRUSHES and DESK LAMP at the bench, SHOP INTERIOR at the wall — all twelve build)
+  // RUP (ROOM_UPGRADE_PLAN rev 1 section 2.4; under ?rehaul=1 only — today's look keeps WORK): the moved places' work — SUPPLIER (its shelf over the door) from THE NOTEBOOK,
+  // looking up; SHOP INTERIOR (its cabinet on the left wall) from behind the case's wild end, looking up (admire_n: there is no up-left frame; R2k's lane plays the pose
+  // where he stands and looks to the place's side, src/75_rh_people.js ADM_SIDE). Every work spot lies in his lane (canvas x 229-609: tools/rehaul/statecheck.mjs)
+  const RH_WORK = { supplier: ['notebook', 'admire', 'n'], shelves: [CASE_END, 'admire', 'n'] };
+  const workOf = (id) => (RHON() && RH_WORK[id]) || WORK[id];
   let WK = null;   // (the work last read: an errand on its way keeps it if its build ends meanwhile)
-  const workNow = () => { const b = SHOP.building ? SHOP.building() : null; if (b && WORK[b.id]) WK = WORK[b.id]; return WK; };
+  const workNow = () => { const b = SHOP.building ? SHOP.building() : null; if (b && workOf(b.id)) WK = workOf(b.id); return WK; };
   /** the purchase's first visit: over to the build, its work there (as the errand does it), home — the mood's glasses push there */
   function workRoute(id) {
-    const [at, pose, dir] = WORK[id], s = Array.isArray(at) ? at : SP()[at]; if (!s) { walkHome(); return; }
+    const [at, pose, dir] = workOf(id), s = Array.isArray(at) ? at : SP()[at]; if (!s) { walkHome(); return; }
     log('work', id, 'at', Array.isArray(at) ? 'floor' : at); setMode('REACT'); S.own = true;
     const work = S.workAct = POSEA(pose, Array.isArray(at) ? { dir, dur: WORK_T } : { dir, dur: WORK_T, loop: true }), face = Array.isArray(at) ? () => faceFor(dir || 's', s[0], s[1]) : s[2];
     run([...go([s[0], s[1]], 'walk', face, { name: Array.isArray(at) ? 'floor' : at }), work], () => { S.own = false; S.workAct = null; walkHome(); });
@@ -21410,7 +21445,7 @@ const OWNER = (() => {
   /** him at work on the build under way now — { id, t: s into his work pose, n0: the tick it began } — else null (the room's hits) */
   function working() {
     if (!live() || FORCE) return null;
-    const a = S.act, b = SHOP.building ? SHOP.building() : null, w = b && WORK[b.id]; if (!a || !a.pose || !w || a.pose !== w[1]) return null;
+    const a = S.act, b = SHOP.building ? SHOP.building() : null, w = b && workOf(b.id); if (!a || !a.pose || !w || a.pose !== w[1]) return null;
     if (!(a === S.workAct || (S.mode === 'ERRAND' && S.lastErrand === 'build'))) return null;
     return { id: b.id, t: a.t, n0: S.n - a.n };
   }
@@ -21922,7 +21957,7 @@ const OWNER = (() => {
     pos: () => (live() && (S.drawn || !drawable()) ? [S.rx, S.rz] : null), waiting,   // (round 24: where LIFE sorts him among the customers; a "!" or "?" up)
     serve: safe(serve, false), serving: safe1(serving), paid: safe(paid),   // (GLASS COUNTER: the serve with LIFE, the room's pay cue)
     keeperRow: safe(keeperRow, 0), keeperDraw: safe(keeperDraw), keeperTap: safe(keeperTap, false),
-    built: safe(built), working: safe1(working), WORK, WORK_T,   // (ROUND 25, the BUILD lane: a build's REVEAL closed in the room — his admire; him at work on a build — the room's hits)
+    built: safe(built), working: safe1(working), WORK, WORK_T, RH_WORK, workOf: (id) => workOf(id), spots: () => Object.assign({}, SP()), CASE_END,   // (ROUND 25, the BUILD lane: a build's REVEAL closed in the room — his admire; him at work on a build — the room's hits; RUP: the new engine's work spots)
     _S: S, _custIn: () => { try { return custIn(); } catch (e) { return false; } }, _route: route, _clampFloor: clampFloor, _unproject: unproject, _covers: safe(covers, 0), _dirOf: (h, x, z) => dirOf(h, x, z).slice(), _anim: anim };
 })();
 if (typeof DEV !== 'undefined') DEV.owner = OWNER;
@@ -23047,7 +23082,7 @@ if (typeof DEV !== 'undefined') DEV.life = LIFE;
    art (W1_CONTRACTS 2 and 7; ?rehaul=1): the art itself is in themes/, and RH.need(name) loads themes/<name>.js?v=<its fp's first 12>;
    RH.loaded checks the file's record fp against the fp here, so an older cached file never draws under this page. REHAUL.on needs
    this module (src/75_rehaul.js); it has no `room` key: the room's art is the lazy file (src/75_rh_room.js).
-   rh_room   MY SHOP's room (the MVP's record on the PLATE grid): fp 67ee99e9b915…, 625,479 B
+   rh_room   MY SHOP's room (the MVP's record on the PLATE grid): fp eceea6209da5…, 780,507 B
    rh_bench  THE WORKBENCH (the stitched plate, or the stand-in): fp 7da66ae9cc3d…, 38,120 B
    rh_fig_kd KNIGHTS & DRAGONS' figures at 1.5x (F.3: the branch's tools/bake3d/pack.mjs --rh kd): fp f57ce9841d40…, 4,510,716 B
    rh_counter THE COUNTER close-up (THE GLASS CASE, the stitched plate): fp 9c6deffedd54…, 29,419 B
@@ -23075,9 +23110,9 @@ if (typeof DEV !== 'undefined') DEV.life = LIFE;
    rh_fig_pi figures at 1.5x (the branch's tools/bake3d/pack.mjs --rh pi): fp d3c5ac410fcc…, 4,115,221 B
    rh_fig_un figures at 1.5x (the branch's tools/bake3d/pack.mjs --rh un): fp c062b6a2346e…, 4,179,118 B
    rh_fig_wi figures at 1.5x (the branch's tools/bake3d/pack.mjs --rh wi): fp 34c69e744eaa…, 4,061,550 B
-   Written from the fork tta-3x-lab at fdf520283b0340256893c698949aec9cee46f027 (2026-10-30T03:47:53+01:00).
+   Written from the fork tta-3x-lab at 5ead1a0946a5928aa76e4ab8b83a14e41f5b1c22 (2026-10-30T15:16:10+01:00).
    ============================================================================= */
-const REHAUL_ART = {"v":"v04+rehaul_v09+grade:cw+herR+himSheets+L2+L1+W2s1+outer:SW1,SW2,SW3,SW4+web:3A2B5P","files":{"rh_room":{"fp":"67ee99e9b91587f4ec1f7cb2fbc9c92b40c5cb2e","bytes":625479},"rh_bench":{"fp":"7da66ae9cc3dd8cb82be46fd06f794102b3a6dde","bytes":38120},"rh_fig_kd":{"fp":"f57ce9841d407782f70ccc287726a8ba0a58ede5","bytes":4510716},"rh_counter":{"fp":"9c6deffedd54772826107e874a91c5bcfbad3126","bytes":29419},"rh_shelf":{"fp":"6e4e39b8553817132f88e2adf6d431f4909d4ca2","bytes":15431},"rh_commissions":{"fp":"a4ea4fb02fa0da8fc0a000eb0d13e970828b848d","bytes":21404},"rh_notebook":{"fp":"1d91838e084612ffb2242ae2c318531ce4d7e32e","bytes":16140},"rh_packsend":{"fp":"8e08f6a4ed9ae5472b2db7249cc1cf45118879b1","bytes":36338},"rh_kid":{"fp":"7542150aa9d19cc21f9c337280ae9cccadb9e2ea","bytes":114269},"rh_c03":{"fp":"774285cc1e5ae6c7f1a2a83742bb699a237ceffe","bytes":93414},"rh_c10":{"fp":"e57beb2867de03de3ae61094c1e022076f6d4bca","bytes":83060},"rh_c04":{"fp":"e6177f89d2a040e3844865b66edc1814c2b4501e","bytes":80712},"rh_c05":{"fp":"a9543c26029147951e1ed0f59e9aab31d6121b1f","bytes":77603},"rh_c06":{"fp":"9217a4700a1b3645fff252a98707bf67d289bb9a","bytes":82262},"rh_c07":{"fp":"03fda30bab99107d23f6e568df9e13aa3d6f0664","bytes":86335},"rh_c09":{"fp":"ba35a7fa3263e5c21eab11179c806bfd1b6460a3","bytes":99926},"rh_kf":{"fp":"a0d4e9002a7afd303a0003b63cfc996dd3756d14","bytes":92081},"rh_busts":{"fp":"d78f63f00f74539cf9377c89389015064c3f48e5","bytes":51873},"rh_mix":{"fp":"20373a3da122a14b52089fba6dd9eaed61825102","bytes":35904},"rh_t_castle":{"fp":"3a62c4ccb04477698ab3acf63f734a695b3ecdcb","bytes":263528},"rh_fig_dw":{"fp":"eb69b12aff6ad9bab4a8fca947225cf293774299","bytes":4436191},"rh_fig_el":{"fp":"f4cfcd3801112e1fb476556f4dcdef2e775ec336","bytes":4486686},"rh_fig_hh":{"fp":"ba5b0a4263d9fe2fea1b00058e97a14cb733194a","bytes":4970318},"rh_fig_og":{"fp":"e5a52c392660ad8992cacd2e446bfb58b115246a","bytes":5392214},"rh_fig_pc":{"fp":"16938aac6160342a133444b75882250635be4771","bytes":3834758},"rh_fig_pi":{"fp":"d3c5ac410fcc578e1cfced83af58ac57ac889bff","bytes":4115221},"rh_fig_un":{"fp":"c062b6a2346ef0e614301087cbff537f6eb6c8ca","bytes":4179118},"rh_fig_wi":{"fp":"34c69e744eaaf6ee590115bebfe5e52b9b297f6b","bytes":4061550}}};
+const REHAUL_ART = {"v":"v04+rehaul_v09+grade:cw+herR+himSheets+L2+L1+W2s1+outer:SW1,SW2,SW3,SW4+web:3A2B5P+rup:56s56p","files":{"rh_room":{"fp":"eceea6209da5709380160429a004743488d5324d","bytes":780507},"rh_bench":{"fp":"7da66ae9cc3dd8cb82be46fd06f794102b3a6dde","bytes":38120},"rh_fig_kd":{"fp":"f57ce9841d407782f70ccc287726a8ba0a58ede5","bytes":4510716},"rh_counter":{"fp":"9c6deffedd54772826107e874a91c5bcfbad3126","bytes":29419},"rh_shelf":{"fp":"6e4e39b8553817132f88e2adf6d431f4909d4ca2","bytes":15431},"rh_commissions":{"fp":"a4ea4fb02fa0da8fc0a000eb0d13e970828b848d","bytes":21404},"rh_notebook":{"fp":"1d91838e084612ffb2242ae2c318531ce4d7e32e","bytes":16140},"rh_packsend":{"fp":"8e08f6a4ed9ae5472b2db7249cc1cf45118879b1","bytes":36338},"rh_kid":{"fp":"7542150aa9d19cc21f9c337280ae9cccadb9e2ea","bytes":114269},"rh_c03":{"fp":"774285cc1e5ae6c7f1a2a83742bb699a237ceffe","bytes":93414},"rh_c10":{"fp":"e57beb2867de03de3ae61094c1e022076f6d4bca","bytes":83060},"rh_c04":{"fp":"e6177f89d2a040e3844865b66edc1814c2b4501e","bytes":80712},"rh_c05":{"fp":"a9543c26029147951e1ed0f59e9aab31d6121b1f","bytes":77603},"rh_c06":{"fp":"9217a4700a1b3645fff252a98707bf67d289bb9a","bytes":82262},"rh_c07":{"fp":"03fda30bab99107d23f6e568df9e13aa3d6f0664","bytes":86335},"rh_c09":{"fp":"ba35a7fa3263e5c21eab11179c806bfd1b6460a3","bytes":99926},"rh_kf":{"fp":"a0d4e9002a7afd303a0003b63cfc996dd3756d14","bytes":92081},"rh_busts":{"fp":"d78f63f00f74539cf9377c89389015064c3f48e5","bytes":51873},"rh_mix":{"fp":"20373a3da122a14b52089fba6dd9eaed61825102","bytes":35904},"rh_t_castle":{"fp":"3a62c4ccb04477698ab3acf63f734a695b3ecdcb","bytes":263528},"rh_fig_dw":{"fp":"eb69b12aff6ad9bab4a8fca947225cf293774299","bytes":4436191},"rh_fig_el":{"fp":"f4cfcd3801112e1fb476556f4dcdef2e775ec336","bytes":4486686},"rh_fig_hh":{"fp":"ba5b0a4263d9fe2fea1b00058e97a14cb733194a","bytes":4970318},"rh_fig_og":{"fp":"e5a52c392660ad8992cacd2e446bfb58b115246a","bytes":5392214},"rh_fig_pc":{"fp":"16938aac6160342a133444b75882250635be4771","bytes":3834758},"rh_fig_pi":{"fp":"d3c5ac410fcc578e1cfced83af58ac57ac889bff","bytes":4115221},"rh_fig_un":{"fp":"c062b6a2346ef0e614301087cbff537f6eb6c8ca","bytes":4179118},"rh_fig_wi":{"fp":"34c69e744eaaf6ee590115bebfe5e52b9b297f6b","bytes":4061550}}};
 
 
 /* ======================= src/75_rehaul.js (src) ======================= */
@@ -23880,7 +23915,7 @@ const RHROOM = (() => {
   const FXO = 79.75, FYO = 12.25, OXI = 53, OYI = 8;   // art = 1.5 x frame + (79.75, 12.25): the frame sits at (53, 8) in the iPhone's 426 x 196 bleed
   const prm = (k, d) => { try { return typeof param === 'function' ? param(k, d) : d; } catch (e) { return d; } };
   const DEMO = prm('rhdemo', '') === '1';
-  let FX = null, PPL = null, WEB = null;   // (src/75_rh_fx.js, src/75_rh_people.js and src/75_rh_web.js, at their load)
+  let FX = null, PPL = null, WEB = null, STS = null;   // (src/75_rh_fx.js, src/75_rh_people.js, src/75_rh_web.js and src/75_rh_states.js, at their load)
   let A = null, AN = null, READY = false;   // (the room's record and its anchors, once prepared)
 
   // ---- the review state (PLAN 1.3, &rhdemo=1): straight into the room, the shop held quiet, a sale visit whenever the room is empty 3 s
@@ -24080,7 +24115,7 @@ const RHROOM = (() => {
 
   // ---- CACHE A: the back plate, the shelf's figures, the sign's word, the lamp's light, SHELF SPACE's dark spots
   let sigA = '', ownA = [], FIGS_A = [], FIGS_B = [];   // ownA: [1x index, sid, …] of the shelf's pieces (their taps); FIGS_A / FIGS_B: the figures as placed (the checks)
-  let SIGN = null;
+  let SIGN = null, PANELW = null;   // (PANELW: RUP's sign word at the last cache A build — its panel and its box [x, y, w, h], PLATE px)
   /** the board's darkest step (its darkest colour with 5 px or more) and the word's place: centred, 1 font px = 1 art px */
   function signOf() {
     const [bx0, bx1, by0, by1] = AN.shop_sign_board.box, cnt = new Map();
@@ -24335,8 +24370,12 @@ const RHROOM = (() => {
       let L = 0; try { L = SHOP.up('tea') | 0; } catch (e) { L = 0; }
       ids = ids.filter((id) => !/^explore_(0|1|2|3|4|5|6|8)$/.test(id)); ids.push('explore_' + ([8, 6, 3, 0].find((k) => k <= L) || 0));
     }
-    return ids.filter((id) => DRESS_IMG[id]).sort((a, b) => ord(a) - ord(b)).map((id) => DRESS_IMG[id]);
+    return ids.filter((id) => DRESS_IMG[id] && keepOld(id)).sort((a, b) => ord(a) - ord(b)).map((id) => DRESS_IMG[id]);
   }
+  /** RUP (ROOM_UPGRADE_PLAN rev 1): an old dressing the room still lays — MIXING TRAYS' trays never (pick 1a: its tray is THE MIXING TABLE's close-up, which shows the
+   *  tray you have), a track that runs on its states (src/75_rh_states.js, the per-track switch) not: its states stand in its place; every other one as today */
+  const OLD_TRACK = { lamp: 'lamp', brushes: 'brush', supplier: 'supplier', patrons: 'board', window: 'window', explore: 'tea', int: 'shelves', sign: 'sign' };
+  const keepOld = (id) => { const m = /^([a-z]+)_\d+$/.exec(id); if (!m) return true; if (m[1] === 'tray') return false; const tr = OLD_TRACK[m[1]]; return !(tr && STS && !TH && STS.use(tr)); };
   /** W2 s3: the EXPLORATION CORNER's things stand INSIDE the glass case's little world (the counter layer's, cache B: behind its glass, behind its figures);
    *  the contest shelf (7) hangs on the left wall (cache A) */
   const inCase = (q) => /^explore_(0|1|2|3|4|5|6|8)$/.test(q.id);
@@ -24405,17 +24444,28 @@ const RHROOM = (() => {
     for (let y = Math.round(cy) - 2; y <= Math.round(cy) + 2; y++) for (let x = Math.round(cx) - 14; x <= Math.round(cx) + 14; x++) { const c = q.px[(y - q.y0) * q.w + (x - q.x0)]; if (c) { sum += Lof(c); n++; } }
     drawWord(D, typeof T === 'function' ? T('MINIATURES') : 'MINIATURES', cx, cy, n && sum / n < 0.55 ? hex32('#f0e6d2') : SIGN.col);
   }
+  /** RUP: MINIATURES on THE SHOP SIGN's panel (its state's `panel`, PLATE px): centred, 1 font px = 1 art px, cream on a dark panel, the board's ink on a light one */
+  function panelWord(D, b) {
+    let sum = 0, n = 0;
+    for (let y = b[2]; y <= b[3]; y++) for (let x = b[0]; x <= b[1]; x++) { if (!inW(x, y)) continue; const c = D[bi(x, y)]; if (c) { sum += Lof(c); n++; } }
+    return drawWord(D, typeof T === 'function' ? T('MINIATURES') : 'MINIATURES', (b[0] + b[1]) / 2, (b[2] + b[3]) / 2, n && sum / n < 0.55 ? hex32('#f0e6d2') : SIGN.col);
+  }
   function buildA() {
     if (GLOWC.k !== String(DBG.glowK)) { GLOWC.clear(); GLOWC.k = String(DBG.glowK); }   // (REHAUL._dbg.glowK = [near, far]: the glow's two steps, for the A/B looks)
     backFill(CA);
     // W2 s1 (A4, A5, A10): the upgrade looks the plate does not paint — THE DESK LAMP, FINE BRUSHES, MIXING TRAYS, the level the game's DRESS chose
     // (one sprite a track, its px on the plate grid): the lamp's light first (pool, cone from its own bulb), then the sprites over it; a track
     // with no sprite in the record keeps W1's bare place
-    const dr = dressNow(), lampS = dr.find((q) => q.bulb);
-    if (DBG.lamp && lampS) lampLight(CA, lampS.bulb); else if (DBG.lamp && lampPainted()) lampLight(CA);
+    const dr = dressNow(), lampS = dr.find((q) => q.bulb), lampNew = !!(STS && !TH && STS.use('lamp'));   // (RUP: THE DESK LAMP on its states — its pool and core are checkpoint 2's light layer)
+    if (DBG.lamp && lampS) lampLight(CA, lampS.bulb); else if (DBG.lamp && lampPainted() && !lampNew) lampLight(CA);
     const sgn = dr.find((q) => /^sign_/.test(q.id)); if (sgn) maskSign(CA, sgn);
     for (const q0 of dr) if (!inB(q0)) { const [q, qx, qy] = laidA(q0); for (let y = 0; y < q.h; y++) for (let x = 0; x < q.w; x++) { const c = q.px[y * q.w + x], X = qx + x, Y = qy + y; if (c && inW(X, Y)) CA[bi(X, Y)] = c; }
       if (q0.id === 'int_11') for (const [X, Y, hx] of NAIL11) if (inW(X, Y)) CA[bi(X, Y)] = hex32(hx); }
+    // RUP: the tracks that run on their states (src/75_rh_states.js), cache A's: each one's level as painted, PATRONS' letters, the sign's panel; their px answer for their
+    // stations (before the shelf's pieces: a piece over a state wins its px), and those on the window's glass stay off the sky (src/75_rh_fx.js glassOff)
+    ownA = []; let panel = null, stMiss = false;
+    FX.glassOff(null);   // (the plate's whole glass first: the states' px on it are found against it, never against the last build's cut)
+    if (STS && !TH) { const r = STS.paint(CA, 'A', { AW, PX, PY, XE, YE, BOF, toFi, glass: FX.onGlass }); ownA = r.own; panel = r.panel; stMiss = r.miss; FX.glassOff(r.glass); }   // (a window piece's figure on its way: built again next frame)
     // SHELF SPACE's spots not opened yet: their light off (x 0.55). Each level's closed COLUMNS are marked once, then each marked px is
     // multiplied once (MVP_GATE_A fix 5: two neighbouring closed spots each took columns 293 and 334, 0.55 x 0.55 = a 1-px darker seam)
     const lit = min(15, SHOP.caseLit ? SHOP.caseLit() : 15), shut = SHELF_ROWS.map(() => new Uint8Array(BACK.w));   // (a plate column each)
@@ -24424,20 +24474,21 @@ const RHROOM = (() => {
     for (let lv = 0; lv < 3; lv++) { const ya = lv === 0 ? 32 : SHELF_ROWS[lv - 1] + 3, yb = SHELF_ROWS[lv] - 1, sh = shut[lv];
       for (let y = ya; y <= yb; y++) for (let x = IN0; x < IN1; x++) { if (!sh[x] || !inW(x, y)) continue; const i = bi(x, y); if (CA[i]) CA[i] = mul(CA[i], 0.55); } }
     fitShelf((G.S.kept || []).slice(0, 15).map((p, k) => [p, floor(k / 5)]));
-    ownA = []; FIGS_A = []; let miss = false; BLC[BLI['shelf figures']] = 0; BLP[BLI['shelf figures']] = 0;
+    FIGS_A = []; let miss = false; BLC[BLI['shelf figures']] = 0; BLP[BLI['shelf figures']] = 0;
     (G.S.kept || []).slice(0, 15).forEach((p, k) => { const s = figSprite(p, PIECE_SHELF, floor(k / 5)); if (!s) { miss = true; return; } const lv = floor(k / 5), fx = SHELF_X[k % 5], fy = SHELF_ROWS[lv], m = [];
       const at = DBG.figSeat ? seatFig(CA, s, fx, SHELF_SEAT[lv], m, BLI['shelf figures']) : (blit(CA, s, round(fx - s.ax), round(fy - s.ay), false, 0, 1, m, BLI['shelf figures']), [round(fx - s.ax), round(fy - s.ay)]);
       FIGS_A.push({ where: 'shelf', k, lv, fig: p.fig, fx, seat: SHELF_SEAT[lv], ox: at[0], oy: at[1], s });
       for (const i of m) { const f = toFi(i); if (f >= 0) ownA.push(f, SID.cabinet); } });
-    if (sgn) { if (DBG.sign) signWord(CA, sgn); } else if (DBG.sign) drawWord(CA, typeof T === 'function' ? T('MINIATURES') : 'MINIATURES', (SIGN.box[0] + SIGN.box[1]) / 2, (SIGN.box[2] + SIGN.box[3]) / 2, SIGN.col);   // STEP1_GATE fix 1
+    PANELW = null;
+    if (sgn) { if (DBG.sign) signWord(CA, sgn); } else if (panel) { if (DBG.sign) PANELW = { panel, word: panelWord(CA, panel) }; } else if (DBG.sign) drawWord(CA, typeof T === 'function' ? T('MINIATURES') : 'MINIATURES', (SIGN.box[0] + SIGN.box[1]) / 2, (SIGN.box[2] + SIGN.box[3]) / 2, SIGN.col);   // STEP1_GATE fix 1
     FX.beamTable();
     ST.cacheA++;
-    return !miss;
+    return !miss && !stMiss;
   }
-  function sigOfA() { const k = (G.S.kept || []).slice(0, 15); return k.map(idOf).join(',') + '|' + dressNow().map((q) => q.id).join(',') + '|' + (SHOP.caseLit ? SHOP.caseLit() : 15) + '|' + (typeof T === 'function' ? T('MINIATURES') : ''); }
+  function sigOfA() { const k = (G.S.kept || []).slice(0, 15); return k.map(idOf).join(',') + '|' + dressNow().map((q) => q.id).join(',') + '|' + (STS && !TH ? STS.sigA() : '') + '|' + (SHOP.caseLit ? SHOP.caseLit() : 15) + '|' + (typeof T === 'function' ? T('MINIATURES') : ''); }
 
   // ---- CACHE B: THE COUNTER layer, THE GLASS CASE's figures (back row first, one step lighter: behind glass), the glass layer, the glints
-  let sigB = '', ownB = [], FIGM = null;   // FIGM: the case figures' px on the buffer (rebuild)
+  let sigB = '', ownB = [], FIGM = null, SHUT = [];   // FIGM: the case figures' px on the buffer (rebuild); SHUT: THE COUNTER's places dimmed at the last build (RUP pick 2a)
   let CASEIN = null;   // the glass front's inside (the little world behind the glass): the sheen's area, on the buffer (rebuild)
   function caseIn() {
     CASEIN = new Uint8Array(AW * AH);
@@ -24446,81 +24497,26 @@ const RHROOM = (() => {
     for (let y = 0; y < CTR.h; y++) for (let x = 0; x < CTR.w; x++) { const X = CTR.x0 + x, Y = CTR.y0 + y; if (!inW(X, Y)) continue; const i = bi(X, Y); if (CTR.px[y * CTR.w + x] && Y >= top && Y <= bot && X >= 96 && X <= 424 && !gl[i]) CASEIN[i] = 1; }
   }
 
-  // ---- W2 s4: THE COUNTER at every level, in code, through the counter layer's own masks (no art): the TOP (the stone slab from the back edge to its
-  //      cream front edge, row 198, and its front face under it: the layer's grey px, the bell's and the tip jar's boxes left out) and the case's ROAD
-  //      (the sandy path in the little world, rows 232-246). Level 0 as painted · 1 a cobbled road · 2 + a low kerb and little flowers · 3 the top turns
-  //      polished white marble with grey veins (&rhcounter3=brass: the grey stone kept, its front edge and its left end brass) · 4 + little warm lights
-  //      along the road's front edge. The look is a copy of the layer (CTRL), keyed by level + variant; level 0 (and the switch off) is CTR itself.
-  const BRASS3 = String(prm('rhcounter3', '')).toLowerCase() === 'brass';
-  const CTRL = {};
-  const ckey = () => { let L = 0; try { L = SHOP.up('counter') | 0; } catch (e) { fail('counter level', e); } return L ? L + (L >= 3 && BRASS3 ? 'b' : '') : ''; };
-  const chroma = (c) => max(R8(c), G8(c), B8(c)) - min(R8(c), G8(c), B8(c));
-  const isSand = (c) => c && R8(c) >= 205 && R8(c) > G8(c) && G8(c) > B8(c) && R8(c) - B8(c) >= 70;
-  function counterLook(key) {
-    if (!key) return { ctr: CTR, gls: GLS };
-    if (CTRL[key]) return CTRL[key];
-    const L = parseInt(key, 10), brass = /b$/.test(key), w = CTR.w, h = CTR.h, px = Uint32Array.from(CTR.px), X0 = CTR.x0, Y0 = CTR.y0;
-    // (the glass layer — the top's lip, its front face, the rails — is drawn over this layer: what is SEEN at a px is the glass's, else the counter's; a put lands in the layer that shows)
-    const gpx = Uint32Array.from(GLS.px), gw = GLS.w, gh = GLS.h, GX = GLS.x0, GY = GLS.y0;
-    const gi = (x, y) => (x < GX || y < GY || x >= GX + gw || y >= GY + gh ? -1 : (y - GY) * gw + x - GX);
-    const at = (x, y) => { const g = gi(x, y); if (g >= 0 && gpx[g]) return gpx[g]; return x < X0 || y < Y0 || x >= X0 + w || y >= Y0 + h ? 0 : px[(y - Y0) * w + x - X0]; };
-    const put = (x, y, c) => { const g = gi(x, y); if (g >= 0 && gpx[g]) { gpx[g] = c; return; } if (x >= X0 && y >= Y0 && x < X0 + w && y < Y0 + h && px[(y - Y0) * w + x - X0]) px[(y - Y0) * w + x - X0] = c; };
-    // ---- the ROAD: the sandy px of the case's little world (rows 232-245, x 100-421), its top line per column
-    const RX0 = 100, RX1 = 421, RY0 = 232, RY1 = 245, top = new Int16Array(RX1 + 2).fill(-1), road = new Uint8Array((RX1 + 2) * (RY1 + 2));
-    for (let x = RX0; x <= RX1; x++) for (let y = RY0; y <= RY1; y++) if (isSand(at(x, y))) { road[y * (RX1 + 2) + x] = 1; if (top[x] < 0) top[x] = y; }
-    const isRoad = (x, y) => x >= RX0 && x <= RX1 && y >= RY0 && y <= RY1 && road[y * (RX1 + 2) + x] === 1;
-    // the cobbles: stones a band of rows high (nearer = bigger), joints staggered a band to the next; a lit top row, a dark joint row
-    const STONE = ['#cdbb9c', '#bba98b', '#d8c9ad', '#ad9c80'].map(hex32), JOINT = hex32('#7b6a58'), HI = hex32('#ecdfc6');
-    const bands = [[RY0, 236, 4], [237, 239, 5], [240, 242, 6], [243, 245, 7]];
-    for (let x = RX0; x <= RX1; x++) for (let y = RY0; y <= RY1; y++) { if (!isRoad(x, y)) continue;
-      const bi_ = bands.findIndex((b) => y >= b[0] && y <= b[1]), [b0, b1, cw] = bands[bi_], row = y - b0, off = (bi_ * 3 + (bi_ & 1 ? 2 : 0)) % cw, cell = floor((x + off) / cw), cx = (x + off) % cw;
-      const last = y === b1 && b1 > b0, joint = cx === 0 || last, k = floor(hash(cell * 131 + bi_ * 17 + 5) * 4);
-      put(x, y, joint ? mix(STONE[k], JOINT, last ? 0.75 : 0.6) : row === 0 ? mix(STONE[k], HI, 0.5) : mix(STONE[k], JOINT, (hash(x * 31 + y * 7) < 0.18) ? 0.18 : 0)); }
-    if (L >= 2) {   // a low kerb along the path's top (two rows of dressed stones, a joint every 5 px; the line smoothed over 7 columns) + little flowers in the grass above it
-      const KS = ['#d6cfc1', '#c5bdad'].map(hex32), KD = hex32('#8a8272'), FL = ['#fff3d8', '#f58aa8', '#ffd84a', '#b79cf0'].map(hex32), LEAF = hex32('#3f7a35');
-      const ts = new Int16Array(RX1 + 2).fill(-1);
-      for (let x = RX0; x <= RX1; x++) { const v = []; for (let d = -3; d <= 3; d++) if (top[x + d] >= 0) v.push(top[x + d]); if (v.length >= 3 && top[x] >= 0) { v.sort((p_, q_) => p_ - q_); ts[x] = v[v.length >> 1]; } }
-      for (let x = RX0; x <= RX1; x++) { const t = ts[x]; if (t < 0) continue;
-        for (const y of [t - 1, t]) { const g = at(x, y); if (!g || (y === t - 1 && chroma(g) <= 12 && !isRoad(x, y))) continue; put(x, y, y === t ? (x % 5 === 0 ? KD : KS[floor(x / 5) & 1]) : (x % 5 === 0 ? KD : KS[(floor(x / 5) & 1) ^ 1])); }
-        const gc = at(x, t - 2);
-        if (gc && G8(gc) >= R8(gc) && chroma(gc) > 20 && hash(x * 7 + 3) < 0.09) { const f = FL[floor(hash(x * 13 + 1) * 4)]; put(x, t - 2, f); if (hash(x * 3 + 9) < 0.5) put(x + 1, t - 3, FL[floor(hash(x * 5 + 2) * 4)]); put(x, t - 1, LEAF); }
-      }
-    }
-    if (L >= 4) {   // little warm lights in the road's front edge: a bulb every 15 px with a small warm glow on the road behind it
-      const BU = hex32('#fff2b8'), WA = hex32('#ffc35a');
-      for (let x = RX0 + 8; x <= RX1 - 6; x += 15) { const y = RY1; for (let dy = 1; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) { const c = at(x + dx, y - dy); if (isSand(c) || chroma(c) < 70 && c) { const a = 0.55 * (1 - (abs(dx) + dy) / 6.5); if (a > 0) put(x + dx, y - dy, mix(c, WA, a)); } }
-        put(x - 1, y, WA); put(x, y, BU); put(x + 1, y, BU); put(x + 2, y, WA); put(x, y - 1, mix(at(x, y - 1), BU, 0.6)); put(x + 1, y - 1, mix(at(x + 1, y - 1), BU, 0.6)); }
-    }
-    // ---- the TOP: the slab's stone px (rows from the back edge to 197), its cream front edge (198), its front face (199-203)
-    const bell = AN.bell.box, jar = AN.tip_jar.box, near = (x, y) => x >= jar[0] - 1 && x <= jar[1] + 1 && y >= jar[2] - 4 && y < AN.counter_top_front_row.row - 1;
-    const FR = AN.counter_top_front_row.row, TX0 = 80, TX1 = 433, tm = new Map();
-    for (let x = TX0; x <= TX1; x++) for (let y = 180; y <= FR + 5; y++) { const c = at(x, y); if (!c || (near(x, y) && !(R8(c) >= 95 && R8(c) <= 135 && chroma(c) <= 14))) continue; const g = chroma(c) <= 22 && Lof(c) > 0.3; if (y < FR && g) tm.set(x * 1000 + y, 1); else if (y === FR && R8(c) > 200) tm.set(x * 1000 + y, 2); else if (y > FR && y <= FR + 5 && g) tm.set(x * 1000 + y, 3); }
-    if (L >= 3) {
-      if (brass) {   // B: the stone kept; its front edge and its left end in brass (a lit row over a darker one, a few glints)
-        const BH = hex32('#f3cf72'), BM = hex32('#d29c3a'), BD = hex32('#8c5f1c');
-        for (const [k, v] of tm) { const x = floor(k / 1000), y = k % 1000, c = at(x, y);
-          if (v === 2) put(x, y, hash(x * 11 + 4) < 0.07 ? hex32('#fff0b8') : BH);
-          else if (v === 3 && y === FR + 1) put(x, y, BM); else if (v === 3 && y === FR + 2) put(x, y, BD);
-          else if ((v === 1 || v === 3) && !tm.has((x - 1) * 1000 + y) && x < 140) put(x, y, BM); }
-      } else {   // A: polished white marble with grey veins — the slab's own shading (lit back, darker near the front) carried over
-        const LO = hex32('#cfcbc7'), HIc = hex32('#f6f3ee'), FA = hex32('#a9a5a6'), FB = hex32('#d8d4d0'), VN = [hex32('#8e8c95'), hex32('#a9a7b0')], HAL = hex32('#bdbabe');
-        let lmin = 9, lmax = 0; for (const [k, v] of tm) if (v === 1) { const l = Lof(at(floor(k / 1000), k % 1000)); lmin = min(lmin, l); lmax = max(lmax, l); }
-        const vein = new Set(), ls = []; for (const [k, v] of tm) if (v === 1) ls.push(Lof(at(floor(k / 1000), k % 1000))); ls.sort((p_, q_) => p_ - q_); const lmed = ls[ls.length >> 1];
-        const meander = (x, y, dx, len, sd) => { let yy = y, hv = 0; const sl = (0.12 + hash(sd * 7 + 1) * 0.32) * (sd % 2 ? 1 : -1); let py = round(yy);
-          for (let i = 0; i < len; i++) { const X = x + i * dx; hv += (hash(X * 3 + sd * 5) - 0.5) * 0.12; hv *= 0.9; yy += sl + hv; const Y = round(yy); const lo = min(py, Y), hi = max(py, Y); for (let q = lo; q <= hi; q++) if (q === Y || i % 2 === 0) vein.add(X * 1000 + q); py = Y; if (hash(X * 11 + sd) < 0.012) { let bx = X, by = Y; const bs = -sl * 1.8; for (let j = 0; j < 9; j++) { bx += dx; by += bs; vein.add(bx * 1000 + round(by)); } } } };
-        for (let k = 0; k < 11; k++) { const x = 88 + floor(hash(k * 19 + 2) * 330), y = 181 + floor(hash(k * 29 + 6) * 16); meander(x, y, hash(k * 5 + 1) < 0.5 ? 1 : -1, 22 + floor(hash(k * 41 + 3) * 50), k + 1); }
-        for (const [k, v] of tm) { const x = floor(k / 1000), y = k % 1000, c = at(x, y), t = clamp((Lof(c) - lmin) / Math.max(0.01, lmax - lmin), 0, 1);
-          if (v === 2) { put(x, y, WHITE); continue; }
-          if (v === 3) { put(x, y, mix(mix(FA, FB, t), VN[0], vein.has(k) ? 0.4 : 0)); continue; }
-          let o = mix(LO, HIc, 0.25 + 0.75 * t); if (Lof(c) < lmed * 0.8 && x >= bell[0] - 6 && x <= bell[1] + 6) o = mul(o, 0.78); const n = hash(x * 53 + y * 17); o = mix(o, n < 0.5 ? LO : HIc, 0.07 + 0.05 * n);
-          if (vein.has(k)) o = VN[hash(x + y * 3) < 0.5 ? 0 : 1]; else if (vein.has(k - 1) || vein.has(k + 1)) o = mix(o, HAL, 0.55);
-          if (((x * 2 + y * 5) % 97) === 0) o = WHITE; put(x, y, o); }
-        // polish: one soft glare band across the lit back half
-        for (const [k, v] of tm) if (v === 1) { const x = floor(k / 1000), y = k % 1000, u = (x - 150 + (y - 182) * 3) % 120; if (u >= 0 && u < 3 && y < 190 && !vein.has(k)) put(x, y, mix(at(x, y), WHITE, 0.5)); }
-      }
-    }
-    return (CTRL[key] = { ctr: { x0: X0, y0: Y0, w, h, px }, gls: { x0: GX, y0: GY, w: gw, h: gh, px: gpx } });
+  // ---- THE COUNTER (RUP pick 2a, ROOM_UPGRADE_PLAN rev 1 B1): no code looks (W2 s4's cobbled road, kerb and flowers, marble top and road lights were code-drawn art:
+  //      gone); the counter layer is the plate's, and THE GLASS CASE's places you don't have yet are DIMMED x0.55 — light, not art — the way SHELF SPACE dims its
+  //      closed spots: the open places are the game's own (ROOM.casePlaces(SHOP.counterSlots()): CASE_CENTRED), each place a column of the case's little world (the
+  //      record's light.counter.columns, canvas px; else the midpoints between the places), each px of it multiplied once, before the case's figures and its glass
+  const DIM_K = 0.55;
+  /** the case's places' columns as PLATE boxes [x0, x1, y0, y1] (the record's light.counter, else from the anchors' places: the midpoints, rows 206-246) */
+  function counterCols() {
+    const C = A && A.rup && A.rup.light && A.rup.light.counter;
+    if (C && Array.isArray(C.columns) && C.columns.length === CASE_P.length) return C.columns.map((b) => [b[0] - PLX, b[1] - PLX, b[2] - PLY, b[3] - PLY]);
+    const xs = CASE_P.map((p) => p[0]); return xs.map((x, k) => [k ? round((xs[k - 1] + x) / 2) : x - 11, k < xs.length - 1 ? round((x + xs[k + 1]) / 2) - 1 : x + 11, 206, 246]);
   }
+  /** the places open now (the game's own rule) and the closed ones' columns dimmed in D (cache B, over the counter layer) → the closed places */
+  function counterDim(D) {
+    let open = []; try { open = ROOM.casePlaces(SHOP.counterSlots()); } catch (e) { fail('counter places', e); return []; }
+    const cols = counterCols(), shut = [];
+    for (let k = 0; k < cols.length; k++) { if (open.includes(k)) continue; shut.push(k); const [x0, x1, y0, y1] = cols[k];
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { if (!inW(x, y)) continue; const i = bi(x, y); if (D[i]) D[i] = mul(D[i], DIM_K); } }
+    return shut;
+  }
+  const counterKey = () => { try { return 'c' + SHOP.counterSlots(); } catch (e) { return 'c?'; } };
   function caseNow() {   // LIFE's list (its 0.4 s slides), else G.S.stock in ROOM's places — the room's own drawPieces' rule
     const L = typeof LIFE !== 'undefined' && LIFE.on() ? LIFE.caseList() : null;
     if (Array.isArray(L)) return L;
@@ -24528,9 +24524,10 @@ const RHROOM = (() => {
   }
   function buildB(list, now) {
     CB.fill(0); FIGM.fill(0); ownB = []; FIGS_B = []; for (const k of ['counter', 'case figures', 'glass']) { BLC[BLI[k]] = 0; BLP[BLI[k]] = 0; }
-    const LK = counterLook(ckey());
-    blit(CB, LK.ctr, 0, 0, false, 0, 1, null, BLI.counter);
+    blit(CB, CTR, 0, 0, false, 0, 1, null, BLI.counter);   // (RUP pick 2a: the counter layer as painted, at every level)
     for (const q0 of caseDress()) { const q = smallOf(q0), [qx, qy] = placeAt(q); for (let y = 0; y < q.h; y++) for (let x = 0; x < q.w; x++) { const c = q.px[y * q.w + x], X = qx + x, Y = qy + y; if (c && inW(X, Y)) CB[bi(X, Y)] = c; } }
+    if (STS && !TH) { const r = STS.paint(CB, 'B', { AW, PX, PY, XE, YE, BOF, toFi, glass: null }); for (let k = 0; k < r.own.length; k++) ownB.push(r.own[k]); }   // (RUP: the switched tracks of cache B — THE EXPLORATION CORNER in the case's wild end: src/75_rh_states.js)
+    SHUT = counterDim(CB);   // (RUP pick 2a: THE COUNTER's places you don't have yet, x0.55)
     const webOk = WEB && !TH ? WEB.paint(CB, CA, { AW, PX, PY, XE, YE, BOF }) : true;
     if (WEB && !TH && WEB.ready()) { const c = WEB.BOXES.cubby;   // (SW1: every px of THE CUBBY answers for THE NOTEBOOK — but the door's foot (x 619-641, y 255-276), which is no one's: nothing may block the door)
       for (let y = c[2]; y <= c[3]; y++) for (let x = c[0]; x <= c[1]; x++) { if (x >= 619 && y <= 276) continue; const X = x - PLX, Y = y - PLY; if (!inW(X, Y)) continue; const f = toFi(bi(X, Y)); if (f >= 0) ownB.push(f, SID.notebook); } }   // (SW1: WEBSHOP in THE CUBBY: its states, pieces, parcels and light, in THE COUNTER layer, under every person; MY SHOP only)
@@ -24543,20 +24540,20 @@ const RHROOM = (() => {
       const at = DBG.figSeat ? seatFig(CB, s, fx, caseSeat(fy), m, BLI['case figures']) : (blit(CB, s, round(fx - s.ax), round(fy - s.ay), false, 0, 1, m, BLI['case figures']), [round(fx - s.ax), round(fy - s.ay)]);
       FIGS_B.push({ where: 'case', fig: p.fig, fx, fy, seat: caseSeat(fy), ox: at[0], oy: at[1], s });
       for (const i of m) { FIGM[i] = 1; const f = toFi(i); if (f >= 0) ownB.push(f, SID.counter); } }
-    { let n = 0; for (let y = 0; y < LK.gls.h; y++) for (let x = 0; x < LK.gls.w; x++) { const c = LK.gls.px[y * LK.gls.w + x], X = LK.gls.x0 + x, Y = LK.gls.y0 + y; if (!c || !inW(X, Y)) continue; const i = bi(X, Y); if (!BELLM[i]) { CB[i] = c; n++; } } BLC[BLI.glass] = 1; BLP[BLI.glass] = n; }   // (the bell's own pixels: its sprite, every frame)
+    { let n = 0; for (let y = 0; y < GLS.h; y++) for (let x = 0; x < GLS.w; x++) { const c = GLS.px[y * GLS.w + x], X = GLS.x0 + x, Y = GLS.y0 + y; if (!c || !inW(X, Y)) continue; const i = bi(X, Y); if (!BELLM[i]) { CB[i] = c; n++; } } BLC[BLI.glass] = 1; BLP[BLI.glass] = n; }   // (the bell's own pixels: its sprite, every frame)
     FX.glints();   // (the glints high on the glass and the reflection line under its rail: src/75_rh_fx.js)
     CBRUN = []; CBV = []; for (let i = 0; i < CB.length;) { if (!CB[i]) { i++; continue; } const s = i; while (i < CB.length && CB[i]) i++; CBRUN.push(s, i - s); CBV.push(CB.subarray(s, i)); }
     ST.cacheB++;
     return !miss && webOk;
   }
-  function sigOfB(list, now) { let s = ckey() + '#' + caseDress().map((q) => q.id).join(',') + '|' + (WEB && !TH ? WEB.sig() : '') + '|'; for (const q of list) { s += idOf(q.p) + ':' + q.place + ':' + (q.from === null || q.from === undefined ? '' : q.from) + ';'; if (q.from !== null && q.from !== undefined && now - q.t < 0.45) s += 'slide' + now; } return s; }
+  function sigOfB(list, now) { let s = counterKey() + '#' + caseDress().map((q) => q.id).join(',') + '|' + (STS && !TH ? STS.sigB() : '') + '|' + (WEB && !TH ? WEB.sig() : '') + '|'; for (const q of list) { s += idOf(q.p) + ':' + q.place + ':' + (q.from === null || q.from === undefined ? '' : q.from) + ';'; if (q.from !== null && q.from !== undefined && now - q.t < 0.45) s += 'slide' + now; } return s; }
 
   // ---- SHOP INTERIOR's things (call L1, when packed; STEP1_GATE fix 5): each at its spot on the art grid (the art lane's import, else
   //      the game's own dressing patch rd_int_k, on the art grid), from SHOP INTERIOR's own levels (DRESS.INT_AT); the trailing plants sway
   //      (the rows below the one they hang from, the tip A px, a T s sine), the pothos on its cord from the ceiling
   let INT_SPOT = {};
   function interior(t) {
-    if (!INTERIOR) return;
+    if (!INTERIOR || (STS && !TH && STS.use('shelves'))) return;   // (RUP pick 3a: the plants are SHOP INTERIOR's first three states, on its cabinet's top shelf, once it runs on them)
     const L = typeof SHOP !== 'undefined' ? SHOP.up('shelves') : 0, AT = (typeof DRESS !== 'undefined' && DRESS.INT_AT) || [1, 4, 10];
     for (let k = 1; k <= 3; k++) { const id = 'int_' + k, S = INTERIOR[id], I = A.interior[id]; if (!S || L < AT[k - 1]) continue;
       if (!INT_SPOT[k]) {
@@ -24679,6 +24676,7 @@ const RHROOM = (() => {
     const L = caseNow(), sb = sigOfB(L, RM.t); if (sb !== sigB) sigB = buildB(L, RM.t) ? sb : '';
     const own = RM.own; for (let k = 0; k < ownA.length; k += 2) own[ownA[k]] = ownA[k + 1]; for (let k = 0; k < ownB.length; k += 2) own[ownB[k]] = ownB[k + 1];
     if (WEB && !TH) { WEB.parcelSound(); WEB.tick(); }   // (SW1: a parcel that comes while the room is on screen: a soft 'stamp'; the reveal's queued cues)
+    if (STS && !TH) STS.tick();   // (RUP: another track's reveal cues)
     CUR[CK.pieces] += pnow() - t0;
   }
   function end(RM) { if (!READY) return; RM0 = RM; RH.end('room'); }
@@ -24701,6 +24699,7 @@ const RHROOM = (() => {
       RH.BL.zoom = RM.zoom ? +(1 + 1.8 * EASE.inOutCubic(clamp(RM.zoom.t / 0.34, 0, 1))).toFixed(3) : null;
       if (RM.zoom) zoom(RM.zoom);
       if (WEB && !TH && WEB.revealUp()) WEB.drawReveal(AB, AW, AH, PX + PLX, PY + PLY);   // (SW1: a WEBSHOP reveal card is up: its picture box, see-through in the 1x card, shows the crop 2 x 2 art px a px)
+      else if (STS && !TH && STS.revealUp()) STS.drawReveal(AB, AW, AH, PX + PLX, PY + PLY);   // (RUP: another track's card: its crop, k x k art px a px)
     } catch (e) { fail('end', e); }
     ST.last = PPL.last(t);
     return true;
@@ -24711,6 +24710,30 @@ const RHROOM = (() => {
     if (!READY || !CA || !AB) return false;
     try { AB.set(CA); FX.sky(t); for (let k = 0; k < CBV.length; k++) AB.set(CBV[k], CBRUN[2 * k]); return true; } catch (e) { fail('still', e); return false; }
   }
+  /** RUP (THE CARD, src/75_rh_states.js cardPics): the room at track id's levels Ls at one frozen moment, each composed on THE WHOLE CANVAS — a cover of its own, 840 x 390 at
+   *  canvas (0, 0): every cache, the states, the sign's word, the window's sky, whatever window the device shows (a card that opens before the bleed is known, or on a narrow
+   *  window, drew only the cover's part: the states left of the tap frame were missing) — no people → [{ w, h, px (canvas rect r's colours), miss }…] or null. The save, the
+   *  device's cover, its caches and its frame's art are put back at once (its buffers made again and both caches built: no frame shows the card's) */
+  function cardShots(id, Ls, r) {
+    if (!READY || !COV || TH || !G.S || !G.S.up) return null;
+    const S = G.S, up0 = S.up, b0 = S.build, cov0 = COV, w = r[1] - r[0] + 1, h = r[3] - r[2] + 1, out = [];
+    try {
+      COV = { AB: new Uint32Array(CW * CH), W: CW, H: CH, X0: 0, Y0: 0, n: -1 }; rebuild();
+      for (const L of Ls) {
+        S.up = Object.assign({}, up0, { [id]: L }); S.build = null;
+        let miss = !buildA(); const list = caseNow(); if (!buildB(list, TIME)) miss = true; still(TIME);
+        const px = new Uint32Array(w * h); for (let y = 0; y < h; y++) { const Y = clamp(r[2] + y, 0, CH - 1); for (let x = 0; x < w; x++) px[y * w + x] = AB[Y * CW + clamp(r[0] + x, 0, CW - 1)]; }
+        out.push({ w, h, px, miss });
+      }
+    } catch (e) { fail('card shot', e); out.length = 0; }
+    finally {
+      S.up = up0; S.build = b0; COV = cov0;
+      try { rebuild(); if (buildA()) sigA = sigOfA(); const list = caseNow(), sb = sigOfB(list, TIME); if (buildB(list, TIME)) sigB = sb; } catch (e) { fail('card restore', e); }
+    }
+    return out.length === Ls.length ? out : null;
+  }
+  /** one level's card picture (cardShots) */
+  const cardShot = (id, L, r) => { const q = cardShots(id, [L], r); return q ? q[0] : null; };
   /** the zoom into a station (src/63_room.js zoomDraw's maths in art px): the art scales round the station's focus as the frame does */
   function zoom(Zm) {
     const k = EASE.inOutCubic(clamp(Zm.t / 0.34, 0, 1)), s = 1 + 1.8 * k, fx = Zm.st.focus[0], fy = Zm.st.focus[1], qx = fx + (W / 2 - fx) * k, qy = fy + ((17 + (H - 17)) / 2 - fy) * k;
@@ -24738,6 +24761,7 @@ const RHROOM = (() => {
     DRESS_IMG = A.dress ? Object.fromEntries(Object.entries(A.dress).map(([k, I]) => { const q = RH.img32(I, P); q.id = k; q.bulb = I.bulb || null; return [k, q]; })) : null;
     INTERIOR = A.interior ? Object.fromEntries(Object.entries(A.interior).map(([k, I]) => [k, RH.img32(I, P)])) : null; INT_SPOT = {};
     if (WEB) WEB.prep(A, P);   // (SW1: WEBSHOP's region states, parcels and boxes: src/75_rh_web.js)
+    if (STS) STS.prep(A, P);   // (RUP: the room upgrades' states: src/75_rh_states.js)
     CLEANED = {}; SMALL = {}; LAID = {};   // (the sprites' derived copies are made again from this build's)
     if (first) { yield* FX.prep(A, P); yield* PPL.prep(A, P); }
     SHELF_ROWS = AN.shelf_board_feet_rows.rows; SHELF_X = AN.shelf_slots_x.x; CASE_P = AN.case_places_feet.points;
@@ -24776,7 +24800,7 @@ const RHROOM = (() => {
   const SIGN_ART = [0];   // (THE SHOP SIGN: the plate's painted board with the code's word, MINIATURES — level 0's plain board; its levels 1-6 are W2's, A3)
   const NOT_YET = { lamp: 'the plate shows THE WORKBENCH without it (W2: A4)', brushes: 'the plate shows THE WORKBENCH without them (W2: A5)', tray: 'the plate shows THE MIXING TABLE without it (W2: A10)',
     explore: "the plate's painted camp only, not this level's things (W2: A13)", till: 'the plate paints the tip jar with coins (W2: A15)', stock: 'painted on the plate, not your stock (W2: A15)',
-    int: "SHOP INTERIOR's things past the three plants (W2: A14)", counter: 'the plate paints THE COUNTER at level 4 (W2: A8)', supplier: 'W2: A6', patrons: 'W2: A7', window: 'W2: A12',
+    int: "SHOP INTERIOR's things past the three plants (W2: A14)", supplier: 'W2: A6', patrons: 'W2: A7', window: 'W2: A12',
     sign: 'W2: A3', th: "a room theme's own (R3: W7)" };
   const DTRACK = { lamp: 'lamp', brushes: 'brush', explore: 'tea', counter: 'counter', tray: 'table', int: 'shelves', supplier: 'supplier', patrons: 'board', window: 'window', sign: 'sign', spots: 'lights' };
   const DNAME = { bell: 'the bell', till_empty: 'the tip jar, empty (NO TIPS YET)', till_shop: 'the tip jar with your tips', lights_shop: "MY SHOP's lights over the window", lights2_shop: "MY SHOP's lights over the board",
@@ -24797,6 +24821,9 @@ const RHROOM = (() => {
     if (id === 'bell') return BELL ? true : 'no bell sprite in the record';
     if (TH && id.startsWith('th_' + TH + '_')) return true;   // (R3c: the theme's counter-top statuette and front emblem RETIRE under the rehaul — nothing figure-like on THE COUNTER; its things are the till sprites)
     if (TH && /^explore_\d+$/.test(id) && DRESS_IMG && DRESS_IMG.explore_0) return true;   // (the theme's diorama: its own four levels stand for every level)
+    // RUP: a track on its states (src/75_rh_states.js): that level's state — painted: true; a placeholder (only under the DEV override &rhrup=): 'standin'
+    { const m = /^([a-z]+)_(\d+)$/.exec(id), tr = m && OLD_TRACK[m[1]]; if (tr && STS && !TH && STS.use(tr)) return STS.art(tr, +m[2]); }
+    if (/^counter_\d+$/.test(id)) return true;   // (RUP pick 2a: THE COUNTER at every level is the plate's case, the places you don't have yet dimmed: light, code)
     if (/^int_\d+$/.test(id)) return INTERIOR && INTERIOR[id] ? true : NOT_YET.int;
     if (A && A.dress && A.dress[id]) return true;   // (W2's upgrade sheets, when packed)
     const m = /^sign_(\d+)$/.exec(id); if (m) return SIGN_ART.includes(+m[1]) ? true : NOT_YET.sign;
@@ -24853,7 +24880,9 @@ const RHROOM = (() => {
   if (typeof REHAUL_ART !== 'undefined' && REHAUL_ART && REHAUL_ART.room && !(REHAUL_ART.files && REHAUL_ART.files.rh_room)) RH.loaded('rh_room', REHAUL_ART);   // (the MVP's art in the page: ready at the first ask — unless the manifest names the lazy file, which is then the art)
 
   const API = { on: true, R, artOf, room, blit, BLC, BLP, BLI, DEMO, DEMO_SEEDS, begin, pieces, end, ensure, still, stillOK: () => READY && !!CA && !!AB,
-    useFx(f) { FX = f; }, usePeople(p) { PPL = p; }, useWeb(w) { WEB = w; },
+    useFx(f) { FX = f; }, usePeople(p) { PPL = p; }, useWeb(w) { WEB = w; }, useStates(s) { STS = s; },
+    /** (RUP) THE COUNTER's places dimmed at cache B's last build, and the columns (PLATE boxes) */
+    shut: () => SHUT.slice(), counterCols: () => (CASE_P ? counterCols() : null), ownA: () => ownA.slice(), ownB: () => ownB.slice(), panelWord: () => PANELW, cardShot, cardShots,
     get A() { return A; }, get BACK() { return BACK; }, get GLS() { return GLS; }, get CTR() { return CTR; }, get BELL() { return BELL; }, get TILL() { return TILL; }, get LOOK() { return LOOK; }, th: () => TH, live: () => READY, get CA() { return CA; }, get CB() { return CB; }, get INTERIOR() { return INTERIOR; }, get INT_SPOT() { return INT_SPOT; },
     artV: () => (A ? A.v : null), sign: () => SIGN, layers: () => { const o = {}; BLT.forEach((k, i) => { o[k] = { calls: BLC[i], px: BLP[i], scale: 1, cache: i < 4 }; }); return o; },
     quiet, shelf: demoFigures, caseOnly: demoCase, shelfOnly: demoShelf, rebuild: () => { sigA = ''; sigB = ''; },
@@ -24866,6 +24895,405 @@ const RHROOM = (() => {
     front: () => Array.from(FRONT || [], (i) => { const by = (i / AW) | 0; return (by + PY) * HG + (i - by * AW + PX); }) };
   RH.bodyHook(bodyArt);   // (W3f: the coverage fallback asks it for the cast you play as)
   REHAUL._p.room = API;
+  return API;
+})();
+
+
+/* ======================= src/75_rh_states.js (src) ======================= */
+'use strict';
+/* =============================================================================
+   TTA HD LAB (lab R, the full rehaul; RUP) — src/75_rh_states.js        MY SHOP's ROOM UPGRADES AS STATES OF ONE ROOM (RHSTATE)
+   ROOM_UPGRADE_PLAN.md rev 1 (~/dev/concepts/2026-10-30-04h_room-upgrade-plan/, sections 2.3-2.4 and 5 "Built"), picks 1a-5a; the contract is the fork's
+   lab/R/room/rup/README.md (states.json), packed by the fork's lab/R/tools/pack.mjs --rup as the room record's ART.rup: places { track: box, tap, cache, … }, states
+   { <track>_<level>: kind (swap | add | light), src, draw (the keys the level shows, in order), img (PLATE px, 255 = the room shows) }, sprites, light. Every track has ONE
+   place in the room and each level is a painted STATE of that place; nothing here draws art: a thing's look is a painted state, and light is code (hard steps, steady,
+   never a drawn shape). Every box and position is the record's.
+   - THE PER-TRACK SWITCH (use): a track runs on its states only when EVERY state of it in the record is painted (src not 'guide', no `missing`); otherwise it keeps
+     today's look and code path, unchanged (W2's sprites: src/75_rh_room.js dressNow() leaves a track's sprites out only while use() says so). &rhrup=guide (DEV only,
+     off by default): every track runs on its states, placeholders too (&rhrup=sign,brush: those tracks only). A placeholder (src 'guide') never ships by default.
+   - THE COMPOSITION (paint): each switched track's current level (SHOP.up: the level in effect) into cache A or B as places[track].cache says, its `draw` list in order
+     (an add over the swap before it; a light level shows the last painted ones); PATRONS' live letters on COMMISSIONS' places; THE SHOP WINDOW's live pieces on its
+     stands; THE SHOP SIGN's panel for the room's MINIATURES (code text, src/75_rh_room.js); then THE LIGHT LAYER. Each drawn px answers for its station's taps (a window
+     piece: THE COUNTER with it picked, a stand-in: THE WORKBENCH); cache A's px on the window's glass are taken off the sky (src/75_rh_fx.js glassOff).
+   - THE LIGHT LAYER (the plan's one light layer: WEBSHOP_SPEC 12.4's LIFTS kinds, and the record's light entries — the entry in effect at a level is the highest one at
+     or under it): a lamp's POOL (one hard step a ring, the rings of equal area, its centre + lift, capped; a warm pool b + 0.015 a step), the CORES (the painted lamps'
+     bulbs: their L to the cap, a warm one b + 0.03), and a ZONE's lift on the track's own px (THE SHOP SIGN's panel, THE SHOP WINDOW's shelf with its stands and pieces,
+     SHOP INTERIOR's case inside its quad); WEBSHOP's light on THE CUBBY (webLight: src/75_rh_web.js composes the cubby and calls it, whichever states it lays).
+   - THE PIECES (plan 2.4, one order for the room): THE LIGHT BOX's seats first (WEBSHOP's order), then the window's stands take the back-room pieces left (best painted
+     score first, newest on ties), then every empty seat or stand the next stand-in from ONE list (the Crusader, one perfect figure of each other series whose figures are
+     in, the rest of KNIGHTS & DRAGONS): no piece twice, no stand-in on a figure already shown.
+   - THE CARD (plan section 5, WEBSHOP_SPEC 6-7 as the model): for a track on its states and the light places (THE COUNTER, SHELF SPACE): BEFORE (L - 1) and AFTER (L),
+     the room at one frozen moment (src/75_rh_room.js cardShot), the crop centred on the place, 192 x 90 at 2 x 2 if the place fits, else 384 x 180 at 1 x 1, clamped to
+     the plate; the ring round what differs; the level's sound cues under 'sparkle'.
+   - THE KEYS (sigA / sigB): the switch, the level, the letters and the pieces of each track, joined into the room's cache keys.
+   Off, or a room theme on: nothing here runs (MY SHOP only).
+   ============================================================================= */
+const RHSTATE = (() => {
+  'use strict';
+  const ON = typeof RH !== 'undefined' && !!RH && RH.on === true;
+  if (!ON) return { on: false, use: () => false, ready: () => false, cardOn: () => false };
+
+  const { round, floor, min, max, ceil } = Math;
+  const { clamp, rgb32, R8, G8, B8, oklab, unlab } = RH.U;
+  const fail = RH.fail;
+  const PLX = 100, PLY = 48;   // plate = canvas - (100, 48)
+  const prm = (k, d) => { try { return typeof param === 'function' ? param(k, d) : d; } catch (e) { return d; } };
+  // the DEV override (off by default): &rhrup=guide → every track on its states; &rhrup=sign,brush → those tracks
+  const OVR = (() => { const v = String(prm('rhrup', '') || '').trim().toLowerCase(); if (!v || v === '0' || v === 'off') return null; if (v === 'guide' || v === '1' || v === 'all') return true; return new Set(v.split(',').map((q) => q.trim()).filter(Boolean)); })();
+  // the stations' ids (src/63_room.js STATIONS: the room's own table wins once it is up)
+  const SID0 = { counter: 1, cabinet: 2, board: 3, bench: 4, mixer: 5, comm: 7, notebook: 8 };
+  const sidOf = (key) => { if (!key) return 0; try { const T = typeof DEV !== 'undefined' && DEV && DEV.room ? DEV.room.STATIONS : null, s = T && T.find((q) => q.key === key); if (s) return s.sid; } catch (e) { /* the table */ } return SID0[key] || 0; };
+  const pid = new WeakMap(); let PID = 1;
+  const idOf = (o) => { if (!o || typeof o !== 'object') return 0; let v = pid.get(o); if (!v) { v = PID++; pid.set(o, v); } return v; };
+
+  let R0 = null;     // the record's rup, decoded: { places, light, states: { key: { …, S } }, sprites: { key: { …, S } }, keys: { track: [key…] }, order: [track…] }
+  /** the record's rup → decoded (src/75_rh_room.js build() calls it with the record and its palettes) */
+  function prep(rec, P) {
+    R0 = null;
+    const r = rec && rec.rup; if (!r || !r.states || !r.places) return;
+    try {
+      const out = { places: r.places, light: r.light || {}, states: {}, sprites: {}, keys: {}, order: Object.keys(r.places), geom: r.geom || null };
+      for (const k in r.states) { const st = r.states[k]; out.states[k] = Object.assign({}, st, { S: st.img ? RH.img(st.img, P) : null }); (out.keys[st.track] = out.keys[st.track] || []).push(k); }
+      for (const k in r.sprites || {}) { const sp = r.sprites[k]; out.sprites[k] = Object.assign({}, sp, { S: sp.img ? RH.img(sp.img, P) : null }); }
+      R0 = out; PCS.k = '';
+    } catch (e) { fail('rup prep', e); R0 = null; }
+  }
+  const ready = () => !!R0;
+
+  // ---- the per-track switch
+  /** a state painted: a light level always (it shows painted ones: their own keys are asked), else src not 'guide' and nothing missing */
+  const painted = (k) => { const st = R0 && R0.states[k]; return !!st && (st.kind === 'light' || (!!st.src && st.src !== 'guide' && !st.missing && !!st.S)); };
+  /** every state of the track painted (a track with no states: false — not this module's) */
+  const allPainted = (tr) => { const ks = R0 && R0.keys[tr]; return !!ks && ks.length > 0 && ks.every(painted); };
+  const themed = () => { try { return typeof RHROOM !== 'undefined' && RHROOM.th ? !!RHROOM.th() : false; } catch (e) { return false; } };
+  /** THE SWITCH: track tr runs on its states (MY SHOP only; the DEV override, else all its states painted) */
+  function use(tr) {
+    if (!R0 || !R0.keys[tr] || themed()) return false;
+    if (OVR === true || (OVR && OVR.has(tr))) return true;
+    return allPainted(tr);
+  }
+  /** the track's level in effect (SHOP.up: a build under way shows the level before it), clamped to its place's max */
+  const level = (tr) => { let L = 0; try { L = SHOP.up(tr) | 0; } catch (e) { L = 0; } const P = R0 && R0.places[tr]; return clamp(L, 0, P && P.max ? P.max : 99); };
+  /** the keys level L of the track shows (its state's draw list; no state at L: none — the room as painted) */
+  const drawList = (tr, L) => { const st = R0 && R0.states[tr + '_' + L]; return st && Array.isArray(st.draw) ? st.draw.filter((k) => R0.states[k] && R0.states[k].S) : []; };
+  /** a state's or a sprite's decoded image (RH.img: x0, y0 on the PLATE grid, ix, pal) */
+  const img = (k) => (R0 && R0.states[k] ? R0.states[k].S : null);
+  const sprite = (k) => (R0 && R0.sprites[k] ? R0.sprites[k].S : null);
+  /** the art of track tr at level L for the coverage: true (painted, or no state: the room as painted at L0), 'standin' (a placeholder shown: DEV only), or why not */
+  function art(tr, L) {
+    if (!R0) return 'no states in the record';
+    const st = R0.states[tr + '_' + L]; if (!st) return L === 0 ? true : 'no state for this level';
+    const ks = st.kind === 'light' ? st.draw || [] : [tr + '_' + L];
+    return ks.every(painted) ? true : 'standin';
+  }
+
+  // ---- THE LIGHT LAYER
+  /** WEBSHOP_SPEC 12.4's kinds [lift, cap, db] (L' = max(L, min(L + lift, cap)), b + db): a the light box's inside (L1-L4, and the base of L5), b L5's second step over it,
+   *  w a lamp's wedge (warm), bp / wp B and W on a PIECE's px (the lift only: a piece keeps the hue its owner painted it), p the pool on the front board and the lip, s the spill */
+  const LIFTS = { a: [0.12, 0.80, 0.03], b: [0.05, 0.86, 0.01], w: [0.06, 0.86, 0.06], bp: [0.05, 0.86, 0], wp: [0.06, 0.86, 0], p: [0.10, 0.80, 0], s: [0.10, 0.80, 0] };
+  const LIT = new Map();   // ('lift|cap|db' or 'core|L|db') → colour → lit colour
+  const memo = (key) => { let M = LIT.get(key); if (!M) { M = new Map(); LIT.set(key, M); } return M; };
+  /** a colour lit: L' = max(L, min(L + up, cap)), b + db (one table a kind) */
+  function liftBy(c, up, cap, db) {
+    const M = memo(up + '|' + cap + '|' + db); let o = M.get(c);
+    if (o === undefined) { const [L, a, b] = oklab(R8(c), G8(c), B8(c)), L2 = max(L, min(L + up, cap)), q = unlab(L2, a, b + db); o = rgb32(q[0], q[1], q[2]); M.set(c, o); }
+    return o;
+  }
+  const lift = (c, k) => { const K = LIFTS[k]; return liftBy(c, K[0], K[1], K[2]); };
+  /** a lamp's core lit: its L to the cap (0.84: a step under it, 0.004, so the 8-bit colour never rounds over), its hue kept, b + db */
+  function coreOf(c, Lt, db) {
+    const M = memo('core|' + Lt + '|' + db); let o = M.get(c);
+    if (o === undefined) { const [, a, b] = oklab(R8(c), G8(c), B8(c)), q = unlab(Lt - 0.004, a, b + db); o = rgb32(q[0], q[1], q[2]); M.set(c, o); }
+    return o;
+  }
+  /** the light entry of track tr in effect at level L: the record's light[tr] at the highest level at or under L that has one (DESK LAMP's at every level, SHOP INTERIOR's bar
+   *  from 9 on, THE SHOP SIGN's and THE SHOP WINDOW's at their 6) → the entry or null */
+  function lightAt(tr, L) {
+    const E = R0 && R0.light && R0.light[tr]; if (!E || typeof E !== 'object') return null;
+    let best = null, bl = -1; for (const k in E) { const n = +k; if (!isFinite(n) || n > L || n <= bl || !E[k] || typeof E[k] !== 'object') continue; best = E[k]; bl = n; }
+    return best;
+  }
+  const inQuad = (q, x, y) => { let c = false; for (let i = 0, j = q.length - 1; i < q.length; j = i++) { const [xi, yi] = q[i], [xj, yj] = q[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
+  /** track tr's light at level L on buffer D (the room's cache, its window W), mine = the buffer px the track laid (its states, pieces, letters) → px lit */
+  function lightTrack(tr, L, D, mine, W) {
+    const e = lightAt(tr, L); if (!e) return 0;
+    const { AW, PX, PY, XE, YE, BOF } = W, step = (R0.light && R0.light.step) || 0.06, warm = e.tint !== 'neutral';
+    const each = (b, f) => { for (let y = max(b[2] - PLY, PY); y <= min(b[3] - PLY, YE - 1); y++) for (let x = max(b[0] - PLX, PX); x <= min(b[1] - PLX, XE - 1); x++) f(y * AW + x - BOF, x + PLX, y + PLY); };
+    let n = 0;
+    // the pool (a lamp's): one hard step a ring, the rings of equal area (its centre + lift), capped; warm b + 0.015 a step; never the lamp's own px
+    if (e.pool && e.lift > 0) {
+      const p = e.pool, steps = max(1, round(e.steps || e.lift / step)), per = e.lift / steps, cap = e.cap || 0.80, rx = p.w / 2, ry = p.h / 2;
+      each([floor(p.cx - rx), ceil(p.cx + rx), floor(p.cy - ry), ceil(p.cy + ry)], (i, x, y) => {
+        if (!D[i] || mine.has(i)) return; const u = ((x - p.cx) / rx) ** 2 + ((y - p.cy) / ry) ** 2; if (u >= 1) return;   // (px x at x: cx 295.5, w 40 lights x 276-315, the record's pool box)
+        const k = min(steps, floor((1 - u) * steps) + 1); D[i] = liftBy(D[i], per * k, cap, warm ? 0.015 * k : 0); n++; });
+    }
+    // the cores (the painted lamps' bulbs, the record's boxes): on the lamp's own px only, L to the cap, warm b + 0.03
+    for (const b of e.cores || (e.core ? [e.core] : [])) each(b, (i) => { if (!mine.has(i) || !D[i]) return; D[i] = coreOf(D[i], e.coreCap || 0.84, warm ? 0.03 : 0); n++; });
+    // a zone's lift, on the track's own px only: + one step, capped (the sign's panel, the window's shelf with its stands and pieces, the cabinet's inside)
+    const zone = (b, up, cap, f) => each(b, (i, x, y) => { if (!mine.has(i) || !D[i] || (f && !f(x, y))) return; D[i] = liftBy(D[i], up, cap, 0); n++; });
+    if (e.panel && e.panel_lift) zone(e.panel, e.panel_lift, e.cap || 0.86);
+    if (e.box && e.lift && !e.pool) zone(e.box, e.lift, e.cap || 0.80);
+    if (e.quad && e.lift) { const q = e.quad, bb = [min(...q.map((v) => v[0])), max(...q.map((v) => v[0])), min(...q.map((v) => v[1])), max(...q.map((v) => v[1]))]; zone(bb, e.lift, e.cap || 0.86, (x, y) => inQuad(q, x + 0.5, y + 0.5)); }
+    return n;
+  }
+  /** WEBSHOP's light (WEBSHOP_SPEC 12.4) on THE CUBBY's buffer — out (its colours), own (its pieces' px), c (its canvas box), w (its width), level L, B (the boxes in effect: SW1's,
+   *  or the record's spec boxes once it runs on its states); cores: the lamps' 2 x 2 cores lit too (core1 from L1, core2 at L5: the record's states paint them unlit) */
+  function webLight(out, own, c, w, L, B, cores) {
+    const at = (x, y) => (y - c[2]) * w + x - c[0];
+    const zone = (r, k, kp) => { for (let y = r[2]; y <= r[3]; y++) for (let x = r[0]; x <= r[1]; x++) { const i = at(x, y); if (out[i]) out[i] = lift(out[i], kp && own[i] ? kp : k); } };
+    const inside = L >= 3 ? B.lightboxIn : B.homemadeIn;
+    zone(inside, 'a');
+    if (L >= 5) {
+      zone(inside, 'b', 'bp');
+      for (const wd of [B.wedge1, B.wedge2]) {   // a hard-edged beam from the core's foot down, clipped to the inside
+        for (let y = inside[2]; y <= inside[3]; y++) { const d = y + 1 - wd.ay; if (d <= 0) continue; const x0 = max(inside[0], round(wd.ax + wd.sl * d)), x1 = min(inside[1], round(wd.ax + wd.sr * d) - 1);
+          for (let x = x0; x <= x1; x++) { const i = at(x, y); if (out[i]) out[i] = lift(out[i], own[i] ? 'wp' : 'w'); } } }
+      zone(B.pool, 'p'); zone(B.spillA, 's');
+    }
+    if (cores) { const cap = (R0 && R0.places.web && R0.places.web.core_cap) || 0.84;
+      for (const [b, from] of [[B.core1, 1], [B.core2, 5]]) if (b && L >= from) for (let y = b[2]; y <= b[3]; y++) for (let x = b[0]; x <= b[1]; x++) { const i = at(x, y); if (out[i] && !own[i]) out[i] = coreOf(out[i], cap, 0.03); } }
+  }
+
+  // ---- THE PIECES (plan 2.4: one order for the room)
+  const STAND = new Map();   // fig id → its stand-in (one object for good: the caches' keys know it)
+  function standOf(id) {
+    let p = STAND.get(id); if (p) return p;
+    const fi = FIGDEF.byId[id]; if (fi === undefined) return null;
+    const f = FIGDEF.FIGS[fi], fc = FIGDEF.FAC[f.fac].cols, ch = [{ h: fc[0], f: 1 }, { h: fc[1], f: 2 }]; let g = 'MASTERPIECE'; try { g = DEV.proto.gradeOf(1).name; } catch (e) { /* the grade's own name where it is known */ }
+    p = { fig: f.id, c: ch, base: 0, q: 1, v: SHOP.tag ? SHOP.tag(fi, 1, ch) : 40, g, lvl: SHOP.lvl ? SHOP.lvl() : 1, standin: true }; STAND.set(id, p); return p;
+  }
+  /** a series' figures are in (the 1.5x file): asked of nobody — a stand-in never fetches a series */
+  const seriesIn = (s) => { try { return RH.ready('rh_fig_' + s) && typeof ART !== 'undefined' && !!ART.rhfig && !!ART.rhfig[s]; } catch (e) { return false; } };
+  /** THE STAND-INS, one list: the Crusader (KNIGHTS & DRAGONS), then one perfect figure — the first — of each other series whose figures are in, then the rest of KNIGHTS &
+   *  DRAGONS (the Crusader Captain first): never empty, each once */
+  function standins() {
+    const F = FIGDEF.FIGS, ser = (FIGDEF.SERIES || []).map((s) => s.id), out = [], add = (id) => { const p = standOf(id); if (p && !out.includes(p)) out.push(p); };
+    add('knight');
+    for (const s of ser) { if (s === 'kd' || !seriesIn(s)) continue; const f = F.find((q) => q.s === s); if (f) add(f.id); }
+    add('knight_drama'); for (const f of F) if (f.s === 'kd') add(f.id);
+    return out;
+  }
+  /** THE SHOP WINDOW's stands at level L (its state's, else the last of its draw list's that says) */
+  const standsAt = (L) => { const st = R0 && R0.states['window_' + L]; if (!st) return 0; if (st.stands) return st.stands | 0; for (const k of (st.draw || []).slice().reverse()) { const s = R0.states[k]; if (s && s.stands) return s.stands | 0; } return 0; };
+  let PCS = { k: '', v: null };
+  /** the room's pieces in ONE order (plan 2.4) at WEBSHOP level webL and SHOP WINDOW level winL (default: now): THE LIGHT BOX's seats first (src/75_rh_web.js candidates():
+   *  running auctions newest first, the newest back-room piece, the newest piece of a waiting order), then the window's stands the back-room pieces left (best painted score
+   *  first, newest on ties), then every empty seat or stand the next stand-in (standins(), never a figure already shown) → { seats: [{ p, kind, l? }], stands: [{ p, kind, k? }] } */
+  function roomPieces(webL, winL) {
+    const Wb = REHAUL._p.web, wl = webL === undefined ? (Wb && Wb.lvl ? Wb.lvl() : 0) : webL, nl = winL === undefined ? level('window') : winL, onW = use('window');
+    const key = (typeof FRAME !== 'undefined' ? FRAME : 0) + ':' + wl + ':' + nl + ':' + (onW ? 1 : 0) + ':' + ((G.S && G.S.stock) || []).length + ':' + ((G.S && G.S.list) || []).length + ':' + ((G.S && G.S.orders) || []).length;
+    if (PCS.k === key && PCS.v) return PCS.v;
+    const nSeats = Wb && Wb.on && Wb.seatsOf ? Wb.seatsOf(wl) : 0, nStands = onW ? standsAt(nl) : 0, seats = [], used = new Set();
+    for (const c of nSeats && Wb.candidates ? Wb.candidates() : []) { if (seats.length >= nSeats) break; if (!c.p || !c.p.fig || used.has(c.p)) continue; seats.push(c); used.add(c.p); }
+    const st = (G.S && G.S.stock) || [], n0 = SHOP.counterSlots ? SHOP.counterSlots() : 4, back = [];
+    for (let k = n0; k < st.length; k++) { const p = st[k]; if (p && p.fig && !used.has(p)) back.push({ p, k }); }
+    back.sort((a, b) => (+b.p.q || 0) - (+a.p.q || 0) || b.k - a.k);
+    const stands = back.slice(0, nStands).map((e) => ({ p: e.p, kind: 'stock', k: e.k }));
+    const shown = new Set(seats.concat(stands).map((e) => e.p.fig)), pool = standins().filter((p) => !shown.has(p.fig));
+    let j = 0;
+    while (seats.length < nSeats && j < pool.length) seats.push({ p: pool[j++], kind: 'standin' });
+    while (stands.length < nStands && j < pool.length) stands.push({ p: pool[j++], kind: 'standin' });
+    PCS = { k: key, v: { seats, stands } };
+    return PCS.v;
+  }
+  /** a window piece's sprite: the figures' own renderer at the window's size (20, as THE LIGHT BOX's), its width capped to its piece box (wmax art px) → sprite or null (a
+   *  series on its way) */
+  const PSPR = new WeakMap();
+  function pieceSprite(p, wmax) {
+    if (typeof RHFIG === 'undefined' || !RHFIG.on) return null;
+    const m = PSPR.get(p) || {}; if (m[wmax]) return RHFIG.sprite(p, m[wmax]);
+    for (let cap = 1; cap >= 0.4; cap -= 1 / 16) {
+      const o = { size: 20, view: 0, base: 'thin', cap }, s = RHFIG.sprite(p, o); if (!s) return null;
+      let x0 = s.w, x1 = -1; for (let i = 0; i < s.px.length; i++) if (s.px[i]) { const x = i % s.w; if (x < x0) x0 = x; if (x > x1) x1 = x; }
+      if (x1 - x0 + 1 <= wmax || cap - 1 / 16 < 0.4) { m[wmax] = o; PSPR.set(p, m); return s; }
+    }
+    return null;
+  }
+
+  // ---- PATRONS' letters (pick 5a: KEEP COMMISSIONS): the open places of its level (places.board.open), a letter where a request waits (G.S.comm, in order), a pin where none does
+  const letters = () => { try { return ((G.S && G.S.comm) || []).length; } catch (e) { return 0; } };
+  /** the sprite's offset in a place: where the record cut it (its x, y against the place it lies in), else the place's top-left */
+  function offIn(sp, places) {
+    for (const k in places) { const b = places[k]; if (sp.x >= b[0] && sp.x <= b[1] && sp.y >= b[2] && sp.y <= b[3]) return [sp.x - b[0], sp.y - b[2]]; }
+    return [0, 0];
+  }
+  /** the letters and pins of the board at level L: [[spriteKey, canvas x, canvas y]…] */
+  function boardMarks(L) {
+    const P = R0 && R0.places.board; if (!P || !P.letters || !P.open) return [];
+    const open = P.open[L] || P.open[String(L)] || [], n = letters(), out = [];
+    open.forEach((pk, j) => { const b = P.letters[pk]; if (!b) return; const key = j < n ? 'letter' : 'pin', sp = R0.sprites[key]; if (!sp || !sp.S) return; const o = offIn(sp, P.letters); out.push([key, b[0] + o[0], b[2] + o[1]]); });
+    return out;
+  }
+  const DROPS = new Map();
+  /** one step darker (the room's own drop: OKLab L - 0.08, a little less colour): the contact shadow */
+  function drop(c) {
+    let o = DROPS.get(c);
+    if (o === undefined) { const [L, a, b] = oklab(R8(c), G8(c), B8(c)), q = unlab(L - 0.08, a * 0.95, b * 0.95); o = rgb32(q[0], q[1], q[2]); DROPS.set(c, o); }
+    return o;
+  }
+
+  /**
+   * THE COMPOSITION into a cache: D = the cache's buffer, which = 'A' | 'B', W = the room's window { AW, PX, PY, XE, YE, BOF, toFi (a buffer index → its 1x frame px, -1 outside),
+   * glass (a buffer index → on the window's glass) } → { own: [frame px, sid, …] (the taps), glass: [buffer index…] (px on the glass: cache A), panel: the sign's panel (PLATE box)
+   * when its state is drawn, tracks: { track: [L, keys…] }, lit: { track: px lit }, miss: a piece's figure is on its way (the room builds again next frame) }
+   */
+  const LAST = { A: {}, B: {}, litA: {}, litB: {} };   // (each cache's last composition: the tracks laid, their level and keys, the px each one's light lit — the checks read it)
+  let WPCS = [];   // THE SHOP WINDOW's pieces as last laid: [{ e, bb (canvas box drawn), px (canvas px, y * 1024 + x), stand }] (the taps, the checks)
+  function paint(D, which, W) {
+    const out = { own: [], glass: [], panel: null, tracks: {}, lit: {}, miss: false };
+    LAST[which] = out.tracks; LAST['lit' + which] = out.lit;
+    if (which === 'A') WPCS = [];
+    if (!R0) return out;
+    const { AW, PX, PY, XE, YE, BOF, toFi, glass } = W;
+    const take = (i, sid, mine) => { if (sid) { const f = toFi(i); if (f >= 0) out.own.push(f, sid); } if (which === 'A' && glass && glass(i)) out.glass.push(i); if (mine) mine.add(i); };
+    const lay = (S, sid, ox, oy, mine) => {   // a decoded image at its place (+ ox, oy plate px) → D; its px for the taps, the glass and the light
+      if (!S) return;
+      const ix = S.ix, pal = S.pal, w = S.w;
+      for (let y = 0; y < S.h; y++) { const Y = S.y0 + y + oy; if (Y < PY || Y >= YE) continue; const r = Y * AW - BOF;
+        for (let x = 0; x < w; x++) { const v = ix[y * w + x]; if (v === 255) continue; const X = S.x0 + x + ox; if (X < PX || X >= XE) continue; const i = r + X; D[i] = pal[v]; take(i, sid, mine); } }
+    };
+    for (const tr of R0.order) {
+      const P = R0.places[tr];
+      if (!P || P.cache !== which || tr === 'web' || !use(tr)) continue;   // (WEBSHOP: src/75_rh_web.js lays its state, its pieces, parcels and light over it)
+      const L = level(tr), keys = drawList(tr, L), sid = sidOf(P.tap === 'piece' ? '' : P.tap), mine = new Set();
+      for (const k of keys) lay(img(k), sid, 0, 0, mine);
+      out.tracks[tr] = [L].concat(keys);
+      if (tr === 'board') {   // the letters and pins, each over its 1-px contact shadow (down-right: the light is from the upper left)
+        for (const [key, cx, cy] of boardMarks(L)) { const S = sprite(key), sp = R0.sprites[key]; if (!S) continue; const ox = cx - sp.x, oy = cy - sp.y, own = new Set();
+          for (let y = 0; y < S.h; y++) for (let x = 0; x < S.w; x++) if (S.ix[y * S.w + x] !== 255) own.add((S.y0 + y + oy) * 4096 + S.x0 + x + ox);
+          for (const q of own) { const X = (q % 4096) + 1, Y = ((q / 4096) | 0) + 1; if (own.has(Y * 4096 + X) || X < PX || X >= XE || Y < PY || Y >= YE) continue; const i = Y * AW + X - BOF; if (D[i]) D[i] = drop(D[i]); }
+          lay(S, sid, ox, oy, mine); }
+        out.tracks[tr].push('marks:' + boardMarks(L).map((m) => m[0][0]).join(''));
+      }
+      if (tr === 'window') {   // THE SHOP WINDOW's live pieces (plan 2.4): a piece a stand, its base's lowest row on the row over the stand, its contact shadow (2 px right of its base), its
+        // own px for THE COUNTER (a back-room piece: its stock page with it picked) or THE WORKBENCH (a stand-in)
+        const list = roomPieces(undefined, L).stands, SB = P.stands || [], PB = P.pieces || [];
+        list.forEach((e, k) => {
+          const sb = SB[k], pb = PB[k] || sb; if (!sb) return;
+          const s = pieceSprite(e.p, pb[1] - pb[0] + 1); if (!s) { out.miss = true; return; }
+          const feet = sb[2] - 1, ox = round((pb[0] + pb[1] + 1) / 2 - s.ax), oy = feet - s.bot, psid = sidOf(e.kind === 'standin' ? 'bench' : 'counter'), set = new Set(), px = [];
+          for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) if (s.px[y * s.w + x]) set.add((oy + s.y0 + y) * 1024 + ox + s.x0 + x);
+          for (const [dk, dy] of [[1, 0], [2, 0], [1, -1]]) { const X = ox + s.sx1 + dk, Y = feet + dy; if (set.has(Y * 1024 + X)) continue; const bx = X - PLX, by = Y - PLY; if (bx < PX || bx >= XE || by < PY || by >= YE) continue; const i = by * AW + bx - BOF; if (D[i]) { D[i] = drop(D[i]); mine.add(i); } }
+          let x0 = 1e9, x1 = -1, y0 = 1e9, y1 = -1;
+          for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) { const c = s.px[y * s.w + x]; if (!c) continue; const X = ox + s.x0 + x, Y = oy + s.y0 + y, bx = X - PLX, by = Y - PLY; if (bx < PX || bx >= XE || by < PY || by >= YE) continue;
+            const i = by * AW + bx - BOF; D[i] = c; take(i, psid, mine); px.push(Y * 1024 + X); if (X < x0) x0 = X; if (X > x1) x1 = X; if (Y < y0) y0 = Y; if (Y > y1) y1 = Y; }
+          WPCS.push({ e, bb: [x0, x1, y0, y1], px, stand: k });
+        });
+        out.tracks[tr].push('pieces:' + list.map((e) => (e.kind === 'standin' ? 's' : 'p') + ':' + e.p.fig).join(','));
+      }
+      out.lit[tr] = lightTrack(tr, L, D, mine, W);
+      if (tr === 'sign' && keys.length) { const st = R0.states[tr + '_' + L]; if (st && st.panel) { const b = st.panel; out.panel = [b[0] - PLX, b[1] - PLX, b[2] - PLY, b[3] - PLY]; } }
+    }
+    return out;
+  }
+  /** the cut of a cache: each switched track of it, its level (the board's letters, the window's pieces) — the room joins it into its cache key */
+  function sig(which) {
+    if (!R0) return '';
+    let s = '';
+    for (const tr of R0.order) { const P = R0.places[tr]; if (!P || P.cache !== which || tr === 'web' || !R0.keys[tr]) continue; if (!use(tr)) { s += tr + ':o;'; continue; } const L = level(tr);
+      s += tr + ':' + L + (tr === 'board' ? '/' + letters() : '') + (tr === 'window' ? '/' + roomPieces(undefined, L).stands.map((e) => idOf(e.p) + e.kind[0]).join(',') : '') + ';'; }
+    return s;
+  }
+  const sigA = () => sig('A'), sigB = () => sig('B');
+
+  // ---- THE TAPS: frame px → what a tap there asks of THE COUNTER (null: its plain page): a window piece from the back room → its stock page with it picked (src/62_proto.js)
+  function tapEx(fx, fy) {
+    if (!R0 || themed()) return null;
+    const ax = floor(1.5 * (fx + 0.5) + 179.5), ay = floor(1.5 * (fy + 0.5) + 60);
+    for (const q of WPCS) { const b = q.bb; if (ax < b[0] - 1 || ax > b[1] + 1 || ay < b[2] - 1 || ay > b[3] + 1) continue; return q.e.kind === 'stock' ? { rupPick: q.e.k } : null; }
+    return null;
+  }
+
+  // ---- THE CARD (plan section 5; WEBSHOP_SPEC 6-7 the model): BEFORE (L - 1) and AFTER (L), the room at one frozen moment (no people, no badges, no hover), the crop centred
+  //      on the place: 192 x 90 at 2 x 2 art px a crop px if the place fits, else 384 x 180 at 1 x 1, clamped to the plate; see-through in the 1x card's picture box; the gold
+  //      ring round what differs (src/62_proto.js); the level's sound cues under 'sparkle' when the AFTER shows
+  /** the sound of a level's reveal: [[sfx, s after the AFTER shows]…] — what the level adds, in the room's own sounds (WEBSHOP's: src/75_rh_web.js CUES) */
+  const CUES = {
+    sign: { 1: [['hammer', 0], ['card_flip', 0.2]], 2: [['hammer', 0], ['hammer', 0.22]], 3: [['saw', 0], ['glint_1', 0.3]], 4: [['salute_ting', 0], ['glint_3', 0.22]], 5: [['hammer', 0], ['salute_ting', 0.25]], 6: [['lamp_click', 0], ['lamp_click', 0.28]] },
+    brush: { 1: [['bottle_cork', 0], ['glint_1', 0.2]], 2: [['slide', 0], ['knock', 0.2]], 3: [['slide', 0], ['knock', 0.18], ['knock', 0.36]], 4: [['slide', 0], ['knock', 0.18], ['knock', 0.36]], 5: [['turntable', 0], ['glint_2', 0.3]], 6: [['turntable', 0], ['glint_3', 0.3]], 7: [['salute_ting', 0], ['glint_5', 0.25]] },
+    lamp: { 1: [['lamp_click', 0]], 2: [['slide', 0], ['lamp_click', 0.3]], 3: [['lamp_click', 0], ['glint_1', 0.2]], 4: [['slide', 0], ['glint_2', 0.25]], 5: [['lamp_click', 0], ['lamp_click', 0.28]] },
+    supplier: { 1: [['tape_rip', 0], ['slide', 0.2]], 2: [['slide', 0], ['knock', 0.2]], 3: [['slide', 0], ['knock', 0.2], ['glint_2', 0.4]], 4: [['stamp', 0], ['glint_3', 0.25]], 5: [['salute_ting', 0], ['glint_5', 0.25]] },
+    board: { 1: [['knock', 0], ['page', 0.2]], 2: [['hammer', 0], ['hammer', 0.25]], 3: [['letter_open', 0], ['salute_ting', 0.25]], 4: [['saw', 0], ['knock', 0.3]], 5: [['salute_ting', 0], ['glint_4', 0.25]] },
+    window: { 1: [['slide', 0], ['knock', 0.2]], 2: [['slide', 0], ['glint_1', 0.2]], 3: [['slide', 0], ['glint_1', 0.2]], 4: [['slide', 0], ['glint_1', 0.2]], 5: [['salute_ting', 0], ['slide', 0.2]], 6: [['lamp_click', 0], ['lamp_click', 0.28]] },
+    tea: { 1: [['page', 0], ['knock', 0.2]], 2: [['fan_flutter', 0], ['knock', 0.25]], 3: [['shake_thud', 0], ['shake_thud', 0.25]], 4: [['shake_rattle', 0]], 5: [['knock', 0], ['glint_2', 0.25]], 6: [['candle_light', 0], ['lantern_whoosh', 0.2]], 7: [['lantern_whoosh', 0], ['glint_1', 0.2], ['glint_2', 0.4]], 8: [['coins', 0], ['glint_5', 0.25]] },
+    shelves: { 1: [['plip', 0], ['plip', 0.2]], 2: [['plip', 0], ['plip', 0.2]], 3: [['plip', 0], ['plip', 0.2]], 4: [['slide', 0], ['knock', 0.2]], 5: [['shake_rattle', 0]], 6: [['knock', 0], ['knock', 0.2]], 7: [['wash_swish', 0]], 8: [['glint_1', 0], ['knock', 0.2]], 9: [['lamp_click', 0], ['glint_2', 0.25]], 10: [['slide', 0], ['knock', 0.25]], 11: [['saw', 0], ['knock', 0.3]], 12: [['salute_ting', 0], ['glint_5', 0.25]] },
+    counter: { 1: [['lamp_click', 0]], 2: [['lamp_click', 0]], 3: [['lamp_click', 0]], 4: [['lamp_click', 0], ['glint_2', 0.25]] },
+    lights: Object.fromEntries(Array.from({ length: 10 }, (_, k) => [k + 1, [['lamp_click', 0]]])),
+  };
+  /** the card is the new look's for track id: a track on its states, or a light place (no states: THE COUNTER, SHELF SPACE); WEBSHOP is src/75_rh_web.js's; MY SHOP only */
+  function cardOn(id) {
+    if (!R0 || id === 'web' || themed()) return false;
+    const P = R0.places[id]; if (!P || !P.box) return false;
+    return R0.keys[id] ? use(id) : true;
+  }
+  /** the card's crop of track id: { r: canvas [x0, x1, y0, y1], k: 2 | 1 } — centred on its place (its box and its states' rects), 192 x 90 at 2 x 2 if the place fits, else
+   *  384 x 180 at 1 x 1, clamped to the plate (x 100-739, y 48-341) */
+  function cardRect(id) {
+    const P = R0 && R0.places[id]; if (!P || !P.box) return null;
+    let [x0, x1, y0, y1] = P.box;
+    for (const k of R0.keys[id] || []) { const st = R0.states[k]; if (!st || !st.S || !st.w) continue; x0 = min(x0, st.x); x1 = max(x1, st.x + st.w - 1); y0 = min(y0, st.y); y1 = max(y1, st.y + st.h - 1); }
+    const fits = x1 - x0 + 1 <= 192 && y1 - y0 + 1 <= 90, w = fits ? 192 : 384, h = fits ? 90 : 180;
+    const cx = clamp(round((x0 + x1 + 1) / 2 - w / 2), 100, 739 - w + 1), cy = clamp(round((y0 + y1 + 1) / 2 - h / 2), 48, 341 - h + 1);
+    return { r: [cx, cx + w - 1, cy, cy + h - 1], k: fits ? 2 : 1 };
+  }
+  /** the card's pictures of track id at levels Ls: [{ w, h, px (canvas colours), miss, k, r }…] — the room built for each on the whole canvas (src/75_rh_room.js cardShots),
+   *  the crop cardRect's, or r / k given (WEBSHOP's spec crop); null while the room is not built */
+  function cardPics(id, Ls, r, k) {
+    const c = r ? { r, k: k || 2 } : cardRect(id); if (!c) return null;
+    const R = typeof RHROOM !== 'undefined' && RHROOM.cardShots ? RHROOM.cardShots(id, Ls, c.r) : null;
+    return R ? R.map((q) => Object.assign(q, { k: c.k, r: c.r })) : null;
+  }
+  const cardPic = (id, L, r, k) => { const q = cardPics(id, [L], r, k); return q ? q[0] : null; };
+  /** the box round the px that differ between two pictures (crop px: [x, y, w, h]) and how many: px linked within 3 px, a lone one is nothing; null = no ring (nothing changed,
+   *  or most of the picture did) — WEBSHOP's own rule (src/75_rh_web.js uses it too) */
+  function ringOf(a, b) {
+    const w = a.w, h = a.h, ch = new Uint8Array(w * h); let n = 0;
+    for (let i = 0; i < w * h; i++) if (a.px[i] !== b.px[i]) { ch[i] = 1; n++; }
+    if (n < 10) return null;
+    let x0 = w, y0 = h, x1 = -1, y1 = -1, m = 0;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { if (!ch[y * w + x]) continue; let near = 0;
+      for (let v = max(0, y - 3); v <= min(h - 1, y + 3); v++) for (let u = max(0, x - 3); u <= min(w - 1, x + 3); u++) if (ch[v * w + u]) near++;
+      if (near >= 4) { m++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } }
+    if (m < 10) return null;
+    const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+    if (bw * bh > 0.5 * w * h || bw > 0.9 * w || bh > 0.9 * h) return null;
+    return { box: [x0, y0, bw, bh], n: m };
+  }
+  const REV = { card: null, pic: null };
+  /** the card's pictures are in: the art layer shows `pic` in the card's box while that card is up */
+  function reveal(card, pic) { REV.card = card; REV.pic = pic; }
+  function revealUp() {
+    const c = REV.card; if (!c) return false;
+    let up = false;
+    try { up = c === (typeof ROOM !== 'undefined' && ROOM.build ? ROOM.build.I : null) || c === (typeof DEV !== 'undefined' && DEV.proto && DEV.proto.P ? DEV.proto.P.inst : null); } catch (e) { up = false; }
+    if (!up) { REV.card = null; REV.pic = null; }
+    return up;
+  }
+  /** the card's picture box on the canvas (the 1x card's: frame 32-287 x 32-151 = canvas 228-611 x 108-287, 384 x 180; WEBSHOP's spec box) */
+  const picBox = () => { const B = R0 && R0.places.web && R0.places.web.spec_boxes; return (B && B.pic) || [228, 611, 108, 287]; };
+  /** the AFTER's crop into the art buffer AB (its cover: AW x AH at canvas X0, Y0), k x k art px a crop px, clipped to the cover */
+  function drawReveal(AB, AW, AH, X0, Y0) {
+    const pic = REV.pic, pb = picBox(); if (!pic) return;
+    const k = pic.k || 2;
+    for (let cy = pb[2]; cy <= pb[3]; cy++) { const y = cy - Y0; if (y < 0 || y >= AH) continue;
+      const sy = floor((cy - pb[2]) / k); if (sy >= pic.h) continue;
+      for (let cx = pb[0]; cx <= pb[1]; cx++) { const x = cx - X0; if (x < 0 || x >= AW) continue; const sx = floor((cx - pb[0]) / k); if (sx >= pic.w) continue; AB[y * AW + x] = pic.px[sy * pic.w + sx]; } }
+  }
+  const QUEUE = [];
+  /** the cues of track id's level L, queued from now (the card's AFTER shows) */
+  function revealSound(id, L) { const t0 = typeof TIME === 'number' ? TIME : 0; for (const [s, dt] of (CUES[id] && CUES[id][L]) || []) QUEUE.push([s, t0 + dt]); QUEUE.sort((a, b) => a[1] - b[1]); tick(); }
+  /** the queued cues whose time has come (the room and the card call it each frame; headless-safe) */
+  function tick() { const t = typeof TIME === 'number' ? TIME : 0; while (QUEUE.length && QUEUE[0][1] <= t) { const [s] = QUEUE.shift(); try { AUDIO.sfx(s, { vol: 0.5 }); } catch (e) { /* no audio */ } } }
+
+  /** the tracks the record has states for, each with its switch (for the checks and the coverage) */
+  const st = () => (R0 ? Object.fromEntries(R0.order.filter((t) => R0.keys[t]).map((t) => [t, { use: use(t), painted: allPainted(t), level: level(t), states: R0.keys[t].length, guide: R0.keys[t].filter((k) => !painted(k)).length }])) : { off: true });
+
+  const API = { on: true, prep, ready, use, level, drawList, img, sprite, art, paint, sigA, sigB, boardMarks, painted, allPainted, st, last: () => ({ A: Object.assign({}, LAST.A), B: Object.assign({}, LAST.B), litA: Object.assign({}, LAST.litA), litB: Object.assign({}, LAST.litB) }),
+    lift, liftBy, coreOf, lightAt, lightTrack, webLight, LIFTS, standins, roomPieces, standsAt, pieceSprite, tapEx, windowPieces: () => WPCS.map((q) => ({ fig: q.e.p.fig, kind: q.e.kind, k: q.e.k, stand: q.stand, bb: q.bb.slice(), px: q.px.slice() })),
+    cardOn, cardRect, cardPic, cardPics, ringOf, reveal, revealUp, drawReveal, revealSound, tick, CUES, idOf,
+    dev: () => (OVR === true ? 'all' : OVR ? [...OVR].join(',') : ''), get R0() { return R0; } };
+  if (typeof RHROOM !== 'undefined' && RHROOM.on && RHROOM.useStates) RHROOM.useStates(API);
+  REHAUL._p.states = API;
   return API;
 })();
 
@@ -24905,7 +25333,7 @@ const RHWEB = (() => {
     // a lamp's WEDGE: a beam from its core's foot (ax, ay: canvas px edges) down: row y spans ax + sl * (y + 1 - ay) .. ax + sr * (y + 1 - ay); aimed at the piece of its side (x 554 / 570)
     wedge1: { ax: 551, ay: 261, sl: -0.13, sr: 0.37 }, wedge2: { ax: 574, ay: 261, sl: -0.39, sr: 0.11 } };
   let W0 = null;     // the record's web part, decoded: { A: { '1': Spr8, … }, B: { … }, P: { p0, s1 … s4 } }
-  let BOXES = BOX;
+  let BOXES = BOX, SW1B = BOX, BTOK = null;   // the boxes in effect: SW1's (the record's ART.web boxes), or RUP's spec boxes (ART.rup places.web.spec_boxes) while WEBSHOP runs on its states
   const lvl = () => { try { return clamp(SHOP.up('web') | 0, 0, 5); } catch (e) { return 0; } };
   const orders = () => ((typeof G !== 'undefined' && G.S && G.S.orders) || []).length;
   const stateA = (L) => (L >= 5 ? '5' : L >= 3 ? '3' : L >= 1 ? '1' : null);
@@ -24913,6 +25341,14 @@ const RHWEB = (() => {
   const capOf = (L) => (L >= 4 ? 4 : L >= 2 ? 2 : 1);          // the parcels the post can show: P0 | 2 slots | 4 slots
   const seatsOf = (L) => (L >= 3 ? 2 : L >= 1 ? 1 : 0);        // the pieces THE LIGHT BOX shows
   const inRect = (b, x, y) => x >= b[0] && x <= b[1] && y >= b[2] && y <= b[3];
+  /** RUP: WEBSHOP runs on the record's states (src/75_rh_states.js: every state of it painted, or the DEV override &rhrup=) */
+  const stsOn = () => typeof RHSTATE !== 'undefined' && !!RHSTATE && RHSTATE.on === true && RHSTATE.use('web');
+  /** the boxes in effect now: the record's spec boxes while WEBSHOP runs on its states (the geometry is the record's: a refit moves them), else SW1's */
+  function syncBoxes() {
+    const R0 = stsOn() ? RHSTATE.R0 : null, sb = R0 && R0.places.web && R0.places.web.spec_boxes, tok = sb || SW1B;
+    if (tok !== BTOK) { BTOK = tok; BOXES = sb ? Object.assign({}, BOX, sb) : SW1B; }
+    return BOXES;
+  }
 
   /** the record's web part → decoded states (src/75_rh_room.js build() calls it with the record and its palettes) */
   function prep(rec, P) {
@@ -24920,25 +25356,14 @@ const RHWEB = (() => {
     if (!rec || !rec.web) return;
     const w = rec.web, out = { A: {}, B: {}, P: {} };
     for (const g of ['A', 'B', 'P']) for (const k in w[g] || {}) out[g][k] = RH.img(w[g][k], P);
-    BOXES = Object.assign({}, BOX, w.boxes || {});
+    SW1B = BOXES = Object.assign({}, BOX, w.boxes || {}); BTOK = null;
     W0 = out;
   }
   const ready = () => !!W0;
 
-  // ---- colour helpers: THE LIGHT and the contact shadow
-  // each kind of light: [lift, cap, db]: L' = max(L, min(L + lift, cap)), b + db (one table a colour and a kind)
-  //   a  the box's inside, L1-L4 (and the base of L5)      b  L5's second step over the inside and the pieces       w  a lamp's wedge (warm)
-  //   bp, wp  B and W on a PIECE's px: the lift only, no warm shift (a piece keeps the hue its owner painted it)
-  //   p  the pool on the front board and the lip           s  the spill right of the box (along the lip, up to THE POST's edge): the lift only, outside the box nothing turns yellow
-  const LIFTS = { a: [0.12, 0.80, 0.03], b: [0.05, 0.86, 0.01], w: [0.06, 0.86, 0.06], bp: [0.05, 0.86, 0], wp: [0.06, 0.86, 0], p: [0.10, 0.80, 0], s: [0.10, 0.80, 0] };
-  const LIT = {};
-  function lift(c, k) {
-    const M = LIT[k] || (LIT[k] = new Map()); let o = M.get(c);
-    if (o === undefined) { const [up, cap, db] = LIFTS[k], [L, a, b] = oklab(R8(c), G8(c), B8(c)), L2 = max(L, min(L + up, cap)), q = unlab(L2, a, b + db); o = rgb32(q[0], q[1], q[2]); M.set(c, o); }
-    return o;
-  }
+  // ---- colour helpers: THE LIGHT (RUP: one light layer for the room — WEBSHOP_SPEC 12.4's kinds live in src/75_rh_states.js, LIFTS and webLight) and the contact shadow
   /** the light on a colour, step A: L' = max(L, min(L + 0.12, 0.80)), b + 0.03 (the box's inside at L1-L4) */
-  const lit = (c) => lift(c, 'a');
+  const lit = (c) => RHSTATE.lift(c, 'a');
   const DROPS = new Map();
   /** one step darker (the room's own drop: OKLab L - 0.08, a little less colour) */
   function drop(c) {
@@ -24958,7 +25383,7 @@ const RHWEB = (() => {
       return { fig: f.id, c: ch, base: 0, q: 1, v: SHOP.tag ? SHOP.tag(fi, 1, ch) : 40, g, lvl: SHOP.lvl ? SHOP.lvl() : 1 }; };
     return (STAND = [mk('knight'), mk('knight_drama')]);
   }
-  const crusader = () => standins()[0];
+  const crusader = () => (typeof RHSTATE !== 'undefined' && RHSTATE.on && RHSTATE.standins ? RHSTATE.standins()[0] : standins()[0]);
   /** the candidates in order: running auctions (newest listed first), the newest back-room piece (G.S.stock past the counter's shown spots), the newest piece of a waiting order, else the Crusader */
   function candidates() {
     const S = G.S, out = [];
@@ -24970,11 +25395,15 @@ const RHWEB = (() => {
     for (const o of ord) for (let k = o.items.length - 1; k >= 0; k--) out.push({ p: o.items[k].p, kind: 'order' });
     return out;
   }
-  /** the pieces on show at level L: [{ p, kind, l?, x (their seat's axis) }], newest first (x 554), never none at level 1+ */
+  /** the pieces on show at level L: [{ p, kind, l?, x (their seat's axis) }], newest first (x 554), never none at level 1+ — RUP (plan 2.4): the room's ONE order
+   *  (src/75_rh_states.js roomPieces: these seats first, then THE SHOP WINDOW's stands, the stand-ins from one list: no piece twice) */
   function seatList(L) {
     const n = seatsOf(L); if (!n || !W0) return [];
-    const picked = candidates().filter((c) => c.p && c.p.fig).slice(0, n);
-    for (const p of standins()) { if (picked.length >= n) break; if (!picked.some((e) => e.p.fig === p.fig)) picked.push({ p, kind: 'standin' }); }   // (a free seat: a stand-in, the Crusader first: never empty, never a twin)
+    syncBoxes();
+    let picked;
+    if (typeof RHSTATE !== 'undefined' && RHSTATE.on && RHSTATE.roomPieces) picked = RHSTATE.roomPieces(L).seats.slice(0, n);
+    else { picked = candidates().filter((c) => c.p && c.p.fig).slice(0, n);
+      for (const p of standins()) { if (picked.length >= n) break; if (!picked.some((e) => e.p.fig === p.fig)) picked.push({ p, kind: 'standin' }); } }   // (a free seat: a stand-in, the Crusader first: never empty, never a twin)
     const xs = (BOXES.seatX || BOX.seatX)[L] || BOX.seatX[L];
     return picked.map((c, k) => Object.assign({}, c, { x: xs[k] }));
   }
@@ -25002,11 +25431,12 @@ const RHWEB = (() => {
    * opts: { orders, pieces } override what the save has (the reveal's pictures: the same for BEFORE and AFTER)
    */
   function compose(L, base, opts) {
+    syncBoxes();
     const c = CUB(), w = cubW(), h = cubH(), out = Uint32Array.from(base), n = opts && opts.orders !== undefined ? opts.orders : orders();
     let miss = false;
-    const a = stateA(L), b = stateB(L);
-    if (a) lay(out, W0.A[a], 0, 0);
-    if (b) lay(out, W0.B[b], 0, 0);
+    const NEW = stsOn();   // (RUP: WEBSHOP on its states — src/75_rh_states.js's per-track switch: the level's state in place of SW1's region states; the pieces, the parcels and the light ride on it)
+    if (NEW) { for (const k of RHSTATE.drawList('web', L)) lay(out, RHSTATE.img(k), 0, 0); }
+    else { const a = stateA(L), b = stateB(L); if (a) lay(out, W0.A[a], 0, 0); if (b) lay(out, W0.B[b], 0, 0); }
     // the pieces: sprite over the states, the base's lowest row on the feet row, its contact shadow 2 px right of the base
     const own = new Uint8Array(w * h), list = opts && opts.pieces ? opts.pieces : seatList(L), two = list.length > 1, feet = BOXES.feet || BOX.feet;
     for (const e of list) {
@@ -25018,22 +25448,15 @@ const RHWEB = (() => {
     }
     // the parcels: one live parcel a waiting order (capacity: P0 | 2 | 4); P0 only at L0-L1
     const k = min(n, capOf(L));
-    if (k >= 1 && L <= 1) lay(out, W0.P.p0, 0, 0);
+    if (NEW) {   // (RUP: the record's two parcel sprites — P0 on the flat box at L0-L1, else the slot parcel at each of its spots)
+      const R0 = RHSTATE.R0, s0 = R0.sprites.parcel0, s1 = R0.sprites.parcel, p0 = BOXES.p0 || BOX.p0, sp = BOXES.spots || BOX.spots;
+      if (k >= 1 && L <= 1) { if (s0) lay(out, s0.S, p0[0] - s0.x, p0[2] - s0.y); }
+      else if (s1) for (let j = 1; j <= k; j++) lay(out, s1.S, sp[j - 1][0] - s1.x, sp[j - 1][2] - s1.y);
+    } else if (k >= 1 && L <= 1) lay(out, W0.P.p0, 0, 0);
     else for (let j = 1; j <= k; j++) lay(out, W0.P['s' + j], 0, 0);
-    // THE LIGHT (opts.light === false: the unlit composition, for the checks): step A over the box's inside at L1-L4; L5 adds, over THE LIGHT BOX's inside, step B, each lamp's wedge, and the pool and the spill
-    if (L >= 1 && !(opts && opts.light === false)) {
-      const at = (x, y) => (y - c[2]) * w + x - c[0];
-      const zone = (r, k, kp) => { for (let y = r[2]; y <= r[3]; y++) for (let x = r[0]; x <= r[1]; x++) { const i = at(x, y); if (out[i]) out[i] = lift(out[i], kp && own[i] ? kp : k); } };
-      const inside = L >= 3 ? BOXES.lightboxIn : BOXES.homemadeIn;
-      zone(inside, 'a');
-      if (L >= 5) {
-        zone(inside, 'b', 'bp');
-        for (const wd of [BOXES.wedge1 || BOX.wedge1, BOXES.wedge2 || BOX.wedge2]) {   // a hard-edged beam from the core's foot down, clipped to the inside
-          for (let y = inside[2]; y <= inside[3]; y++) { const d = y + 1 - wd.ay; if (d <= 0) continue; const x0 = Math.max(inside[0], Math.round(wd.ax + wd.sl * d)), x1 = Math.min(inside[1], Math.round(wd.ax + wd.sr * d) - 1);
-            for (let x = x0; x <= x1; x++) { const i = at(x, y); if (out[i]) out[i] = lift(out[i], own[i] ? 'wp' : 'w'); } } }
-        zone(BOXES.pool || BOX.pool, 'p'); zone(BOXES.spillA || BOX.spillA, 's');
-      }
-    }
+    // THE LIGHT (opts.light === false: the unlit composition, for the checks): step A over the box's inside at L1-L4; L5 adds, over THE LIGHT BOX's inside, step B, each lamp's wedge, and the
+    // pool and the spill (src/75_rh_states.js webLight, the room's one light layer: RUP's states also have their lamps' cores lit)
+    if (L >= 1 && !(opts && opts.light === false)) RHSTATE.webLight(out, own, c, w, L, BOXES, NEW);
     return miss ? { miss: true, px: out } : { miss: false, px: out };
   }
 
@@ -25043,6 +25466,7 @@ const RHWEB = (() => {
    */
   function paint(D, CAB, W) {
     if (!W0) return true;
+    syncBoxes();
     const c = CUB(), w = cubW(), h = cubH(), base = new Uint32Array(w * h), idx = new Int32Array(w * h).fill(-1);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const X = c[0] + x - PLX, Y = c[2] + y - PLY; if (X < W.PX || Y < W.PY || X >= W.XE || Y >= W.YE) continue; const i = Y * W.AW + X - W.BOF; idx[y * w + x] = i; base[y * w + x] = D[i] || CAB[i]; }
     UNDER = base;   // (what is under the web: the reveal's pictures compose any level over it)
@@ -25051,15 +25475,17 @@ const RHWEB = (() => {
     return !r.miss;
   }
 
-  /** a string for the room's cache B key: the level, the orders, the pieces (a plain cut when they change) */
+  /** a string for the room's cache B key: the level, the orders, the pieces (a plain cut when they change), and RUP's switch */
   function sig() {
     if (!W0) return '';
+    syncBoxes();
     const L = lvl(); if (!L && !orders()) return '0';
-    return L + ':' + min(orders(), capOf(L)) + ':' + seatList(L).map((e) => idOf(e.p) + e.kind[0]).join(',');
+    return L + ':' + min(orders(), capOf(L)) + ':' + seatList(L).map((e) => idOf(e.p) + e.kind[0]).join(',') + (stsOn() ? ':rup' : '');
   }
 
   // ---- THE REVEAL's picture: the crop 504-695 x 207-296 of the room (192 x 90 art px) at level L: cache B over cache A, the cubby composed for L → Uint32Array (a canvas crop's colours)
   function crop(L, CAB, D, W, opts) {
+    syncBoxes();
     const cr = BOXES.crop || BOX.crop, w = cr[1] - cr[0] + 1, h = cr[3] - cr[2] + 1, out = new Uint32Array(w * h), c = CUB(), cw = cubW(), ch = cubH();
     if (!UNDER || !W0) return null;
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const X = cr[0] + x - PLX, Y = cr[2] + y - PLY; if (X < W.PX || Y < W.PY || X >= W.XE || Y >= W.YE) continue; const i = Y * W.AW + X - W.BOF; out[y * w + x] = D[i] || CAB[i]; }
@@ -25071,6 +25497,7 @@ const RHWEB = (() => {
   // ---- THE TAPS (spec section 6): frame px → what a tap at it asks of THE NOTEBOOK (null: the plain notebook): a running auction's piece → its page, a stand-in → + LIST A PIECE, a parcel → PACK & SEND
   function tapEx(fx, fy) {
     if (!W0 || (typeof ROOMS !== 'undefined' && ROOMS.active && ROOMS.active())) return null;
+    syncBoxes();
     const ax = floor(1.5 * (fx + 0.5) + 179.5), ay = floor(1.5 * (fy + 0.5) + 60), L = lvl();
     if (!inRect(CUB(), ax, ay)) return null;
     // a shown parcel: P0 (L0-L1) or its slot's box, grown 1 px
@@ -25107,20 +25534,8 @@ const RHWEB = (() => {
       const sy = (cy - pb[2]) >> 1; if (sy >= pic.h) continue;
       for (let cx = pb[0]; cx <= pb[1]; cx++) { const x = cx - X0; if (x < 0 || x >= AW) continue; const sx = (cx - pb[0]) >> 1; if (sx >= pic.w) continue; AB[y * AW + x] = pic.px[sy * pic.w + sx]; } }
   }
-  /** the box round the art px that differ between two pictures (crop px: [x, y, w, h]) and how many: px linked within 3 px, a lone one is nothing; null = no ring (nothing changed, or most of the picture did) */
-  function ringOf(a, b) {
-    const w = a.w, h = a.h, ch = new Uint8Array(w * h); let n = 0;
-    for (let i = 0; i < w * h; i++) if (a.px[i] !== b.px[i]) { ch[i] = 1; n++; }
-    if (n < 10) return null;
-    let x0 = w, y0 = h, x1 = -1, y1 = -1, m = 0;
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { if (!ch[y * w + x]) continue; let near = 0;
-      for (let v = max(0, y - 3); v <= min(h - 1, y + 3); v++) for (let u = max(0, x - 3); u <= min(w - 1, x + 3); u++) if (ch[v * w + u]) near++;
-      if (near >= 4) { m++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } }
-    if (m < 10) return null;
-    const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
-    if (bw * bh > 0.5 * w * h || bw > 0.9 * w || bh > 0.9 * h) return null;
-    return { box: [x0, y0, bw, bh], n: m };
-  }
+  /** the box round the art px that differ between two pictures (crop px: [x, y, w, h]) and how many (RUP: the room's one rule, src/75_rh_states.js ringOf) */
+  const ringOf = (a, b) => RHSTATE.ringOf(a, b);
 
   // ---- THE SOUND under 'sparkle' when THE REVEAL's AFTER shows (spec section 6): the cues of level L
   const CUES = { 1: [['page', 0], ['card_flip', 0.18]], 2: [['tape_rip', 0], ['stamp', 0.22]], 3: [['slide', 0], ['glint_2', 0.2]], 4: [['tape_rip', 0], ['stamp', 0.2], ['stamp', 0.4]], 5: [['lamp_click', 0], ['lamp_click', 0.28]] };
@@ -25133,7 +25548,7 @@ const RHWEB = (() => {
   function parcelSound() { const n = min(orders(), capOf(lvl())); if (SEEN >= 0 && n > SEEN) { try { AUDIO.sfx('stamp', { vol: 0.3 }); } catch (e) { /* none */ } } SEEN = n; }
 
   const API = { on: true, prep, ready, paint, sig, compose, crop, tapEx, reveal, revealUp, drawReveal, ringOf, seatList, candidates, crusader, revealSound, tick, parcelSound, lit, drop, lvl, orders, stateA, stateB, capOf, seatsOf,
-    get BOXES() { return BOXES; }, get BOX() { return BOX; }, get W0() { return W0; } };
+    get BOXES() { return syncBoxes(); }, get BOX() { return BOX; }, get W0() { return W0; } };
   RHROOM.useWeb(API); REHAUL._p.web = API;
   return API;
 })();
@@ -25329,12 +25744,21 @@ const RHFX = (() => {
     for (let y = max(WB[1], PY); y <= min(WB[3], YE - 1); y++) for (let x = max(WB[0], PX); x <= min(WB[2], XE - 1); x++) if (WINP[y * PW + x]) WIN[bi(x, y)] = 1;
     GLINTS = []; BEAMI = new Int32Array(0); BEAMC = new Uint32Array(0); BEAMD = new Int16Array(0); BEAMO = new Uint32Array(0); BEAMQ = -1;
   }
+  /** RUP (src/75_rh_states.js): the window's glass again (the plate's mask), less the px of the states laid over it — their NAMED PARTS (the window's shelf, the lamp,
+   *  the brushes): the sky stays off them. The room's cache A build calls it (null: the whole glass) before the beam's table */
+  function glassOff(list) {
+    if (!WIN) return;
+    for (let y = max(WB[1], PY); y <= min(WB[3], YE - 1); y++) for (let x = max(WB[0], PX); x <= min(WB[2], XE - 1); x++) WIN[bi(x, y)] = WINP[y * PW + x] ? 1 : 0;
+    if (list) for (let k = 0; k < list.length; k++) WIN[list[k]] = 0;
+  }
+  /** a buffer index on the window's glass now */
+  const onGlass = (i) => !!(WIN && WIN[i]);
   /** a room theme's lights (R3c: its record's look; null = MY SHOP's): the lanterns' glow in the string lights' place, the window light's dust and tint */
   function theme(T) {
     const L = T && T.look ? T.look : null;
     BULBS = bulbsOf(L && L.bulbs ? L.bulbs : null); DUSTC = hex32(L && L.dust ? L.dust : '#F8ECD0'); BEAMT = L && L.beam ? [hex32(L.beam[0]), L.beam[1]] : null; BEAMQ = -1;
   }
-  const API = { on: true, theme, prep, win, sky, beam, bulbs, beamTable, glints, glintsAt, glintsN: () => GLINTS.length, counterLife, sheenAt };
+  const API = { on: true, theme, prep, win, sky, beam, bulbs, beamTable, glints, glintsAt, glintsN: () => GLINTS.length, counterLife, sheenAt, glassOff, onGlass };
   RHROOM.useFx(API); REHAUL._p.fx = API;
   return API;
 })();
@@ -25953,7 +26377,7 @@ const RHPEOPLE = (() => {
   };
   const IDLE_OF = { hum: 'hum', mug: 'mug', yawn: 'yawn', window: 'mug', visor: 'goggles', paint: 'paint', jars: 'paint', board: 'paint', letter: 'paint', pack: 'paint', dust: 'inspect', arrange: 'inspect' };
   const QUIET = { idle: 1, hum: 1, mug: 1, window: 1, think: 1 };   // (the brain's own rests: the scheduler may play an idle over them)
-  const ADM_SIDE = { window: 'L', lamp: 'L', brush: 'L', supplier: 'L', lights: 'R', shelves: 'R', board: 'R', table: 'R', web: 'R', sign: 'F' };
+  const ADM_SIDE = { window: 'L', lamp: 'L', brush: 'L', supplier: 'R', lights: 'R', shelves: 'L', board: 'R', table: 'R', web: 'R', sign: 'F' };   // (RUP 2.4: SUPPLIER's shelf over the door is right of him, SHOP INTERIOR's cabinet on the left wall left of him)
   const laneOn = () => DBG.keeperLeaves !== true && SHEETS && !!(HIM && HIM.anims.idle_mug);
   const admSide = (S0) => (laneOn() && S0.anim === 'admire' && S0.mood && S0.mood.k === 'upgrade' && !toHer(S0) ? ADM_SIDE[S0.mood.track] || '' : '');
   const lnCell = (name, dt) => { const I = IDLE[name]; let u = dt; for (const [k, d] of I.seq) { if (u < d) return k; u -= d; } return I.seq[I.seq.length - 1][0]; };
@@ -26092,7 +26516,7 @@ const RHPEOPLE = (() => {
     for (let bx = 0; bx < AW; bx++) { const f = floor((bx + PX + 0.5) / 1.5) - 53; TOFX[bx] = f >= 0 && f < W ? f : -1; }
     for (let by = 0; by < AH; by++) { const f = floor((by + PY + 0.5) / 1.5) - 8; TOFY[by] = f >= 0 && f < H ? f * W : -1; }
   }
-  const API = { on: true, prep, win, hook, begin() { PEOPLE.length = 0; KEEP = null; }, her, drawHer, keeper, drawKeeper, keep: () => KEEP, last, waveBackT, byeWave, KS,
+  const API = { on: true, prep, win, hook, begin() { PEOPLE.length = 0; KEEP = null; }, her, drawHer, keeper, drawKeeper, keep: () => KEEP, last, waveBackT, byeWave, KS, ADM_SIDE,
     blinkInfo: () => BLINKI, play: (n) => { if (!laneOn() || !IDLE[n]) return false; lnStart(n, TIME, 0); return true; }, lane: () => ({ name: LN.name, end: LN.end, next: LN.next, last: LN.last }),   // (R2k: the test hooks — the idle montage and the checks)
      castBody, ownBody, castFiles, pickHim, get HER() { return HER; }, get HIM() { return HIM; } };
   RHROOM.usePeople(API); REHAUL._p.people = API;
