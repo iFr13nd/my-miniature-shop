@@ -23171,7 +23171,15 @@ const REHAUL = (() => {
   //  gone: DECISIONS_ALEX 10, the figures stay close together. W1 E1.3, the people's leftovers (75_rh_people.js): blink3q off = his
   //  three-quarters with their eyes open, as the MVP; eyesOnHer off = his idle and hum facing the camera while she browses, as the MVP;
   //  walkLockX off = her walk in / out without the sideways lock, as the MVP — it acts only once her library carries walk.<an>.shoe_x)
-  const DBG = { beam: true, bulbs: true, glints: true, sheen: true, keeper: true, her: true, sign: true, figLight: true, figShadow: true, figSeat: true, tillDx: -21, keeperLeaves: false, endDx: 35, stripGlow: true, front: true, handoffToHer: true, present: 'auto', mvpFigs: true, blink3q: true, eyesOnHer: true, walkLockX: true, headLead: 0 };
+  //  THE MOTION ROUND (31.10, "customers have low fps animations"; 75_rh_people.js): glide = how a walker's BODY moves between its drawn
+  //  cells — 'b' (the default) the continuous place every tick, 'a' the planted glide (each hop eased over glideF of its hold, centred on
+  //  the cell change), '' the step lock as before (one hop a cell); &rhglide=a|b|0 on the URL. lockMin 0.6 (was 0.75): the drawn stride
+  //  a walk in / out needs, as a share of the world's step at the glass, to take the screen lock. breathHer / blinkHer: the customers'
+  //  1-px breath and the closed-eye copies on their front stands; blinkAll: his copies on look_case / glasses / the counter idles (and his
+  //  breath through them); lookTic false: customer 03-10's old look (the forward flick between two looks); mirrorLeft false: no walk_left
+  //  from a mirrored walk_right (the walker is not drawn, as before); keeperGlide false: his counter walks hop as before
+  const DBG = { beam: true, bulbs: true, glints: true, sheen: true, keeper: true, her: true, sign: true, figLight: true, figShadow: true, figSeat: true, tillDx: -21, keeperLeaves: false, endDx: 35, stripGlow: true, front: true, handoffToHer: true, present: 'auto', mvpFigs: true, blink3q: true, eyesOnHer: true, walkLockX: true, headLead: 0,
+    glide: (() => { const g = prm('rhglide', 'b'); return g === 'a' ? 'a' : g === '0' || g === '' ? '' : 'b'; })(), glideF: 0.6, lockMin: 0.6, breathHer: true, blinkHer: true, blinkAll: true, lookTic: true, mirrorLeft: true, keeperGlide: true };
   const P = { core: null, room: null, fx: null, people: null };   // (the parts, each at its own load)
   const room = () => { const r = P.room; if (r) r.ensure(); return r; };   // (its art prepared, if it is here: the checks read it)
   const C_ = () => P.core;
@@ -25799,10 +25807,14 @@ const RHPEOPLE = (() => {
   //      frame, hello_back_r for a left hello, his own bag / shrug / admire sheets only where he has them). REHAUL._dbg.kid = false: all hers.
   let HER0 = null, KID = null, KIDFAIL = false;
   const KID_BROWSE = [[0, 14], [1, 46], [0, 16], [1, 40], [0, 20], [1, 30]];   // (his look has 2 drawn frames: head forward, head to the case)
-  function useLib(L) { HER = L; BROWSE = L.browse; BEND = L.bend; BEND_N = L.bendN; }
+  function useLib(L) { HER = L; BROWSE = L.cN && DBG.lookTic === false ? C03_BROWSE0 : L.browse; BEND = L.bend; BEND_N = L.bendN; }
   // ---- CUSTOMER 03 (W3b): the cast 'cl' (broad, 96 x 166) is drawn with HIS library (themes/rh_c03.js, her sheet names, 4-6 cell walks, a 3-place look,
   //      a 2-frame wave / pay, a 1-frame bag take and admire); same rule as the kid's: the library it first shows in, kept; REHAUL._dbg.c03 = false: all hers.
-  const C03_BROWSE = [[0, 14], [1, 46], [0, 12], [2, 46], [0, 14], [1, 30], [0, 10], [2, 30]];   // (his look: head forward, then the 2 places at the case)
+  // THE LOOK TIC (the motion round, A2's fix G): the old look flicked the forward cell for 10-14 ticks between every two looks along the case —
+  // a 0.2 s head tic four times a loop. Now the forward cell is held 40 ticks or the head goes side to side, and the look ends on a LEAD cell
+  // (forward, LEAD_T ticks) before the walk to the till, so the walk never starts from a turned head. REHAUL._dbg.lookTic = false: the old look
+  const C03_BROWSE0 = [[0, 14], [1, 46], [0, 12], [2, 46], [0, 14], [1, 30], [0, 10], [2, 30]];   // (the old look: head forward, then the 2 places at the case, forward between)
+  const C03_BROWSE = [[0, 40], [1, 46], [2, 46], [0, 40], [2, 30], [1, 30]];   // (the look: forward, the 2 places at the case side to side, forward, side to side)
   let C03 = null, C03FAIL = false;
   function libFrom(name, field, dflt, flag) {
     let ok = false; try { ok = RH.need(name); } catch (e) { fail(flag + ' need', e); }
@@ -25810,8 +25822,27 @@ const RHPEOPLE = (() => {
     try {
       const rec = RH.rec(name), K = rec && rec[field]; if (!K) return null;
       const P = RH.pals(rec.pals), F = {}; for (const k in K.frames) F[k] = RH.img(K.frames[k], P);
-      return { size: K.size, ax: K.anchor[0], ay: K.anchor[1], F, anims: K.anims, walk: K.walk || {}, browse: (K.walk && K.walk.browse_seq) || dflt, bend: [], bendN: 0, [flag]: true };
+      const L = { size: K.size, ax: K.anchor[0], ay: K.anchor[1], F, anims: K.anims, walk: K.walk || {}, browse: (K.walk && K.walk.browse_seq) || dflt, bend: [], bendN: 0, [flag]: true, cN: flag !== 'kid', name };   // (cN: a customer 03-10 library — customer 10's shape; name: its file, for the cast's own skin list)
+      if (L.cN) try { blinkCast(L, field); } catch (e) { fail(flag + ' blink', e); }   // (his closed-eye copies for the cast's front stands: fix D)
+      return L;
     } catch (e) { fail(flag + ' prep', e); return undefined; }
+  }
+  // THE CUSTOMERS' BLINK (the motion round, A2's fix D — "03-10 never blink"): each cast's 1-cell front stands (stand_front_bag, and the bagless
+  // front stand = walk_front's stop frames) get a closed-eye copy at the library's prep, by HIS eye rule (eyesOf / closedEyes below) with the
+  // cast's OWN skin colours and the ink as the lid: the eyes are the PAIR of ink blobs in the head band (the top 22 % of the cell) ringed by skin
+  // (eyePair), since a cast has no drawn blink to take the eye rows from. A cast whose pair is not found keeps its eyes open: 04 and 09 (hair over
+  // an eye), 03 and 07 (glasses: the eyes merge with the rims), 06 (her eyes are bigger than the rule's 16 px). Her and the kid have drawn blinks
+  // (stand_front_bag 1-2). Shown by her1 on the blink clock (herPick). REHAUL._dbg.blinkHer = false: none
+  const CAST_SKIN = {   // (each cast's skin steps, lit to shade, from its palette: the colours ringing its eyes)
+    c03: [0xfdbb89, 0xe89361, 0xdf8452, 0xaf5e39], c04: [0xec9970, 0xd38259, 0xc77a50, 0xc96945, 0xb36944, 0xffaa81], c05: [0xfaba83, 0xeca26c, 0xd98a57, 0xb9683e],
+    c06: [0xeba97b, 0xe09a6e, 0xbe724c, 0xa8603d, 0x905938], c07: [0xfec290, 0xffcb9c, 0xe29365, 0xcc7a50, 0xc46740], c09: [0xfcc796, 0xefb886, 0xd79969, 0xaf6f44], c10: [0xcc8453, 0xb26d43, 0x995e3e, 0x8e5639],
+  };
+  function blinkCast(L, cast) {
+    const skin = CAST_SKIN[cast]; if (!skin || DBG.blinkHer === false) return;
+    const EP = { lid: 0x1b1416, skin, def: null, shade: null }, keys = [].concat(L.anims.stand_front_bag || [], ((L.walk.walk_front && L.walk.walk_front.stop_frames) || []).map((f) => 'walk_front_' + f));
+    L.blink = {};
+    // (the head band: the top 22 % of the cell — the casts' eyes sit 7-18 % down it; a collar sat at 27 %)
+    for (const k of keys) { const S = L.F[k]; if (!S || L.F[k + '_blink']) continue; const pr = eyePair(S, EP, S.y0, S.y0 + round(S.h * 0.22)); if (!pr) { L.blink[k] = null; continue; } const C = closedEyes(S, pr, EP); if (C) { L.F[k + '_blink'] = C; L.blink[k] = pr.map((e) => [e.x0 + S.x0, e.y0 + S.y0, e.x1 + S.x0, e.y1 + S.y0]); } }
   }
   function kidLib() {
     if (KID) return KID; if (KIDFAIL) return null;
@@ -25933,7 +25964,7 @@ const RHPEOPLE = (() => {
   function bareStand(w) {
     const pass = (an) => { const m = HER.walk[an] || {}, f = m.stop_frames && m.stop_frames.length ? m.stop_frames[0] : 0; return [an, f]; };
     if (w.anim === 'stand' && w.dir === 'nw' && has('walk_back')) return pass('walk_back');
-    if (w.anim === 'stand' && w.dir === 'w') { const a = w.flip && has('walk_right') ? 'walk_right' : has('walk_left') ? 'walk_left' : has('walk_right') ? 'walk_right' : 'walk_front'; return pass(a); }
+    if (w.anim === 'stand' && w.dir === 'w') { if (w.flip && has('walk_right')) return pass('walk_right'); if (has('walk_left')) return pass('walk_left'); if (has('walk_right')) { const v = pass('walk_right'); if (DBG.mirrorLeft !== false) v.push(true); return v; } return pass('walk_front'); }   // (facing west without a walk_left: walk_right's passing frame MIRRORED — fix J, as the walk)
     return pass('walk_front');
   }
   function herPick(w) {
@@ -25946,11 +25977,14 @@ const RHPEOPLE = (() => {
     const key = browse ? 'browse' : (walking ? 'walk:' : '') + b0 + ':' + w.anim + ':' + w.dir; if (key !== R0.key) { R0.key = key; R0.t0 = t; }
     if (w.prop && R0.bagT === null) R0.bagT = t; if (!w.prop) R0.bagT = null;
     const bt = round((t - R0.t0) * 60);
-    // a walk: the sheet by the beat and the way she goes; the frame and the drawn place from the distance walked (no slide)
+    // a walk: the sheet by the beat and the way she goes; the frame from the distance walked, the drawn place by THE GLIDE (below)
     if (w.walking && w.wseg) {
       const s = w.wseg, L = s.ds[s.ds.length - 1], d = posMv(s, t)[3], a0 = s.pts[0], a1 = s.pts[s.pts.length - 1];
-      const side = abs(a1[0] - a0[0]) > abs(a1[1] - a0[1]), an = side ? (a1[0] > a0[0] ? 'walk_right' : 'walk_left') : w.beat === 'out' || a1[1] > a0[1] ? (has('walk_front') && !w.prop ? 'walk_front' : 'walk_front_bag') : 'walk_back';
-      const meta = HER.walk[an] || {}, nfr = (HER.anims[an] || []).length || 8;
+      const side = abs(a1[0] - a0[0]) > abs(a1[1] - a0[1]); let an = side ? (a1[0] > a0[0] ? 'walk_right' : 'walk_left') : w.beat === 'out' || a1[1] > a0[1] ? (has('walk_front') && !w.prop ? 'walk_front' : 'walk_front_bag') : 'walk_back', flip = false;
+      // THE MISSING walk_left (the motion round, A2's fix J): a library without one (customers 04, 05, 06, 07, 10) draws walk_right MIRRORED —
+      // a known lighting flip, never an undrawn walker (frameK gave null: the walker vanished for the whole leftward walk). Customer 09 has a drawn one.
+      if (an === 'walk_left' && !has('walk_left') && has('walk_right') && DBG.mirrorLeft !== false) { an = 'walk_right'; flip = true; }
+      const meta = HER.walk[an] || {}, nfr = (HER.anims[an] || []).length || 8, mx = flip ? -1 : 1;   // (mx: a mirrored sheet's x pins run the other way)
       // THE SCREEN LOCK (the engine check's failure 4; the art lane's requests 1 and 4): she is drawn at ONE size wherever she stands, so her
       // planted shoe holds only if her sprite travels, on the screen, exactly the drawn stride a frame (the library's v_art, art px) — at
       // every depth, not the walk's average (the walk in's art px a unit run from ~0.57 at the glass to over 1 near the street). So the
@@ -25961,30 +25995,51 @@ const RHPEOPLE = (() => {
       // (a walk toward or away from us: the lock needs a drawn stride that fits her cadence where her feet show — the walk's GLASS end, the
       // far one: at least 0.75 of what the world timing gives there; a shorter one (lab G's walk out: 4 art px against 7.3) would make her
       // legs race, so that walk keeps the world timing and its slide until it is redrawn at the full stride — the art lane's)
-      const P = sPath(s); if (P.v === undefined || P.an !== an) { P.an = an; let v = meta.v_art >= 2 ? +meta.v_art : side && meta.cycle_px ? meta.cycle_px / 2 / nfr : 0;
-        if (v && !side) { const g = a0[1] < a1[1] ? a0 : a1, o = g === a0 ? a1 : a0, l = Math.hypot(o[0] - g[0], o[1] - g[1]) || 1, A_ = artOf(g[0], 0, g[1]).slice(), B_ = artOf(g[0] + 10 * (o[0] - g[0]) / l, 0, g[1] + 10 * (o[1] - g[1]) / l); P.ppuG = Math.hypot(B_[0] - A_[0], B_[1] - A_[1]) / 10; if (v < 0.75 * (meta.cycle_units || 102) / nfr * P.ppuG) v = 0; }
+      // THE STRIDE A CELL (the motion round): the libraries' v_art is per CELL for the side walks (cycle_art = cells x v_art) and her 8-frame
+      // walks, but per GAME FRAME for customer 03-10's 4-cell walks in and out (v_art 3.3, v_art_per_cell 10.0, 3 game frames a cell) and her
+      // 4-cell bagless walk out (7.33 a game frame, 2 a cell): read as a per-game-frame stride those walks could never take the lock (3.3
+      // against a threshold of ~11.7) — the world timing's 15-27 px hops with the drawn feet sliding on top, A2's worst mover
+      const P = sPath(s); if (P.v === undefined || P.an !== an) { P.an = an; let v = meta.v_art_per_cell >= 2 ? +meta.v_art_per_cell : meta.v_art >= 2 ? +meta.v_art * (!side && !meta.cycle_art && meta.game_frames_per_cell > 1 ? +meta.game_frames_per_cell : 1) : side && meta.cycle_px ? meta.cycle_px / 2 / nfr : 0;
+        if (v && !side) { const g = a0[1] < a1[1] ? a0 : a1, o = g === a0 ? a1 : a0, l = Math.hypot(o[0] - g[0], o[1] - g[1]) || 1, A_ = artOf(g[0], 0, g[1]).slice(), B_ = artOf(g[0] + 10 * (o[0] - g[0]) / l, 0, g[1] + 10 * (o[1] - g[1]) / l); P.ppuG = Math.hypot(B_[0] - A_[0], B_[1] - A_[1]) / 10; if (v < (DBG.lockMin !== undefined ? +DBG.lockMin : 0.6) * (meta.cycle_units || 102) / nfr * P.ppuG) v = 0; }   // (0.6, was 0.75: the 4-cell walks in and out at 10 px a cell against ~15.6 at the glass join the lock)
         P.v = v; }
-      const v = P.v;
+      const v = P.v, GL = DBG.glide === 'a' || DBG.glide === 'b' ? DBG.glide : '';
+      // THE GLIDE (the motion round, A2's fix A — "position on ones, pose on threes"): the step lock put her body at ONE place a drawn cell,
+      // a hop of a whole stride (16 px on the side walk, 60-108 iPhone px) 5-6 times a second = the "low fps" the owner sees. Now the cell
+      // still comes from the distance walked, but the body moves every tick: GL 'b' = drawn at the CONTINUOUS place (its true place on the
+      // path, never off it; the planted shoe slides a stride over each hold, half before its pin and half after, and snaps back a stride
+      // at the cell change); GL 'a' = THE PLANTED GLIDE: the body sits on each cell's planted spot and each hop is eased, linearly, over
+      // glideF (0.6) of a hold CENTRED on the cell change — the shoe is planted 40 % of every hold and never more than half a stride off its
+      // pin; the first cell starts on the stand and the stop cell lands on the stop 0.2 of a hold before the walk ends, so neither end jumps.
+      // '' = the step lock as before. Both keep the cell's own stop-frame phase: the stand still cuts from a stop frame drawn on the stop
+      const F_ = clamp(+DBG.glideF || 0.6, 0.2, 1);
       if (v) {
         const Q = artOf(PM[0], 0, PM[1]), seg = PM[2], ds = P.cum[seg] + Math.hypot(Q[0] - P.q[seg][0], Q[1] - P.q[seg][1]), stop = w.beat !== 'out';
         const N = stop ? max(1, round(P.L / v)) : 0, step = stop ? P.L / N : v;
         let n = round(ds / step); if (stop) n = min(n, N);
         let ph = startPh(meta, stop, nfr); const SF = meta.stop_frames; if (stop && SF && SF.length) { ph = nfr; for (const f of SF) { const q = (((f - N) % nfr) + nfr) % nfr; if (q < ph) ph = q; } }   // (the phase that puts a stop frame on the stop; a walk that does not stop starts on a start frame)
-        const k = (n + ph) % nfr, G = sAt(P, n * step), dx = meta.dx_art ? meta.dx_art[k] || 0 : 0, dy = meta.dy_art ? meta.dy_art[k] || 0 : 0;   // (each frame's no-slide offset: its planted foot on its pixel)
+        // (each frame's no-slide offset — its planted foot on its pixel — stays under the glide: without it her standing shoe's row drifted 2.5 px
+        //  between stances (people check 3 i); with it the body takes the pin's 2 px at a cell change on top of its glide, the walk's own bob)
+        const k = (n + ph) % nfr, dx = meta.dx_art ? meta.dx_art[k] || 0 : 0, dy = meta.dy_art ? meta.dy_art[k] || 0 : 0;
+        let G = sAt(P, n * step), lock = GL ? 'glide-' + GL : 'screen';
+        if (GL === 'b') G = sAt(P, stop ? min(ds, P.L) : ds);
+        else if (GL === 'a') { const u = ds / step - n; if (u >= 0.5 - F_ / 2 && !(stop && n >= N)) { const G1 = sAt(P, (n + 1) * step), q = (u - (0.5 - F_ / 2)) / F_; G = [G[0] + (G1[0] - G[0]) * q, G[1] + (G1[1] - G[1]) * q]; } else if (u < -0.5 + F_ / 2 && n > 0) { const G0 = sAt(P, (n - 1) * step), q = (u + 0.5 + F_ / 2) / F_; G = [G0[0] + (G[0] - G0[0]) * q, G0[1] + (G[1] - G0[1]) * q]; } }
         const lx = side || n === 0 || (stop && n === N) ? 0 : lockX(meta, k, P, n * step, step);   // (the sideways lock: never on her first or her stop frame, which meet her stand)
-        return { an, key: frameK(an, k), gx: G[0] + dx + lx, gy: G[1] + dy, walk: true, lock: 'screen', step, lx };
+        return { an, key: frameK(an, k), gx: G[0] + mx * (dx + lx), gy: G[1] + dy, walk: true, lock, step, lx, n, flip };
       }
       const A0 = artOf(a0[0], 0, a0[1]).slice(), A1 = artOf(a1[0], 0, a1[1]).slice(), ppu = Math.hypot(A1[0] - A0[0], A1[1] - A0[1]) / max(1, L);   // art px a unit along this walk
       let step = side ? (meta.cycle_px ? meta.cycle_px / 2 / nfr : 9.09) / max(1e-3, ppu) : (meta.cycle_units || 102) / nfr;
       if (!side && meta.step_px) { const sp = meta.step_px / 2 / max(1e-3, ppu); if (sp >= 0.75 * step) step = sp; }
       const stop = w.beat !== 'out'; if (stop) step = L / max(1, round(L / step));
       let n = floor(d / step + 1e-9); if (stop) n = min(n, max(0, round(L / step) - 1));
-      const p = atDist(s, min(L, n * step)), G0 = artOf(p[0], 0, p[1]), k = (n + startPh(meta, stop, nfr)) % nfr, dx = meta.dx_art ? meta.dx_art[k] || 0 : 0, dy = meta.dy_art ? meta.dy_art[k] || 0 : 0;   // (each frame's no-slide offset: its planted foot on its pixel)
-      return { an, key: frameK(an, k), gx: G0[0] + dx, gy: G0[1] + dy, walk: true };
+      // (the world timing's glide: its planted spot is a cell's START, so 'b' is the true place and 'a' eases over the LAST glideF of each cell,
+      //  landing on the next spot — and on the stop — as the cell changes)
+      let dd = n * step; if (GL === 'b') dd = d; else if (GL === 'a') { const u = d / step - n; if (u >= 1 - F_) dd = (n + (u - (1 - F_)) / F_) * step; }
+      const p = atDist(s, min(L, dd)), G0 = artOf(p[0], 0, p[1]), k = (n + startPh(meta, stop, nfr)) % nfr, dx = meta.dx_art ? meta.dx_art[k] || 0 : 0, dy = meta.dy_art ? meta.dy_art[k] || 0 : 0;   // (each frame's no-slide offset: its planted foot on its pixel)
+      return { an, key: frameK(an, k), gx: G0[0] + mx * dx, gy: G0[1] + dy, walk: true, lock: GL ? 'world-glide-' + GL : 'world', step, n, flip };
     }
-    let an = 'browse_back', k = 0, hop = 0;
+    let an = 'browse_back', k = 0, hop = 0, flip = false, blink = false;   // (flip: a mirrored sheet — fix J; blink: a front stand, its closed-eye copy on the blink clock — fix D)
     const b = w.beat;
-    if (hello) { an = helloAn; k = (HER.c03 || HER.c10 || HER.c04 || HER.c05 || HER.c06 || HER.c07 || HER.c09) ? floor(bt / (HELLO_STEP + 2)) % HER.anims[helloAn].length : min(floor(bt / HELLO_STEP), HER.anims[helloAn].length - 1); }   // (customer 03's and 10's wave has 2 drawn frames, out and in: they loop)   // (6 ticks an entry; its last one held, never wrapped back to the arm's start)
+    if (hello) { an = helloAn; k = HER.cN ? floor(bt / (HELLO_STEP + 2)) % HER.anims[helloAn].length : min(floor(bt / HELLO_STEP), HER.anims[helloAn].length - 1); }   // (customer 03's and 10's wave has 2 drawn frames, out and in: they loop)   // (6 ticks an entry; its last one held, never wrapped back to the arm's start)
     else if (browse) {
       let acc = 0; k = BROWSE[BROWSE.length - 1][0]; for (const [f, nn] of BROWSE) { if (bt < acc + nn) { k = f; break; } acc += nn; }
       // the look's END (the art lane's requests 3 and R1): in the last BEND_N ticks before her next walk starts (LIFE has planned it: a 'mv'
@@ -26000,47 +26055,102 @@ const RHPEOPLE = (() => {
           else { k = sq[sq.length - 1][0]; for (const [f, nn] of sq) { if (i < nn) { k = f; break; } i -= nn; } } }   // (a walk that has just begun while LIFE still shows the look: the end's last frame, never back to the clasp)
         else if (nx === Infinity && round((le - t) * 60) <= LEAD_T) k = endSeq(k).lead;   // (the look's planned end near and the walk after it not planned yet — LIFE plans the walk to the till at the look's end, ~18 ticks before it: the end's lead already)
       }
+      // customer 03-10's LEAD CELL (fix G): the forward cell for the last LEAD_T ticks before the look's planned end — the stop they stand at ends
+      // (w.stops: its b, the walk to the till's start, set from the walk in: SHOP's decision + the step) or a walk already planned, else SHOP's
+      // decision itself (w.dec) — so the walk's first cell never follows a head turned to the case; and a look cell that would start within 24
+      // ticks of the lead is skipped — its predecessor holds — so no cell flicks for a few ticks before the lead
+      else if (HER.cN && DBG.lookTic !== false && w.segs) {
+        let nx = Infinity; for (const sg of w.segs) if (sg.k === 'mv' && sg.t1 > t && sg.t0 > t - 0.05 && sg.t0 < nx) nx = sg.t0;
+        const sp = w.stops && w.stops.find((q) => q.a <= t && t < q.b && q.b < 1e8), end = sp ? +sp.b : +w.dec || 0, leadBt = min(end > 0 ? round((end - R0.t0) * 60) - LEAD_T : Infinity, nx < Infinity ? round((nx - R0.t0) * 60) - LEAD_T : Infinity);
+        let acc = 0, kk = BROWSE[BROWSE.length - 1][0], prev = kk, start = 0; for (const [f, nn] of BROWSE) { if (bt < acc + nn) { kk = f; start = acc; break; } prev = f; acc += nn; }
+        k = bt >= leadBt ? 0 : start > 0 && leadBt - start < 24 ? prev : kk;
+      }
     }
-    else if (b === 'totill' || b === 'wait') { an = (HER.c03 || HER.c10 || HER.c04 || HER.c05 || HER.c06 || HER.c07 || HER.c09) ? 'browse_back' : 'pay_back'; k = 0; }   // (customer 03 waits on his stand: the look's forward cell)
-    else if (b === 'pay') { an = 'pay_back'; k = (HER.c03 || HER.c10 || HER.c04 || HER.c05 || HER.c06 || HER.c07 || HER.c09) ? (w.kf < 2 ? 0 : 1) : w.kf < 3 ? [1, 2, 3][w.kf] : 3; }
+    else if (b === 'totill' || b === 'wait') { an = HER.cN ? 'browse_back' : 'pay_back'; k = 0; }   // (customer 03 waits on his stand: the look's forward cell)
+    else if (b === 'pay') { an = 'pay_back'; k = HER.cN ? (w.kf < 2 ? 0 : 1) : w.kf < 3 ? [1, 2, 3][w.kf] : 3; }
     // (the bag take as ONE arc — MVP_GATE_B fix 3: played 0, 1, 2, 3 it read out-down-up-down, a jiggle. 0 the reach to its strap on the
     //  desk, 2 the bag lifted off the desk, 1 its swing down, edge-on, 3 at her hip)
     else if (b === 'hand') { an = 'bag_back'; k = R0.bagT === null ? 0 : (t - R0.bagT) * 60 < 9 ? 2 : (t - R0.bagT) * 60 < 17 ? 1 : 3; }
     else if ((b === 'turn' || b === 'out') && !w.prop && has('walk_front')) {
       // W3d: NO BAG, NO BAG IN HER HAND — a customer who found nothing, a peek, a poke that turns her to you: the turn and the stand
       // facing us are the bagless walks' passing frames (back, the side the turn goes by, front), never the bag's turn / stand
-      const v = bareStand(w); an = v[0]; k = v[1];
+      const v = bareStand(w); an = v[0]; k = v[1]; flip = !!v[2]; blink = an === 'walk_front';
     }
     else if (b === 'turn' || b === 'out') {
       if (w.anim === 'stand' && (w.dir === 'nw' || w.dir === 'w' || w.dir === 'sw')) { an = 'turn_bag'; k = { nw: 0, w: 1, sw: 2 }[w.dir]; }
       else if (w.anim === 'bounce') { an = 'turn_bag'; k = 3; hop = w.kf === 1 ? -2 : 0; }
-      else { an = 'stand_front_bag'; const bl = bt % 90; k = bl >= 5 && bl < 7 ? 1 : bl >= 7 && bl < 11 ? 2 : bl >= 11 && bl < 13 ? 1 : 0; }
+      else { an = 'stand_front_bag'; const bl = bt % 90; k = bl >= 5 && bl < 7 ? 1 : bl >= 7 && bl < 11 ? 2 : bl >= 11 && bl < 13 ? 1 : 0; blink = true; }   // (her drawn blink: cells 1 / 2; a 1-cell stand: its closed-eye copy, fix D)
     }
     // (the kid's bag take has 2 drawn frames, not her 4: the reach, then the carry; his shrug and admire are his own sheets — her library has neither, so she never takes these)
     if (HER.kid && an === 'bag_back') k = k === 2 ? 0 : 1;
-    if ((HER.c03 || HER.c10 || HER.c04 || HER.c05 || HER.c06 || HER.c07 || HER.c09) && an === 'bag_back') { if (k === 2 || k === 0) { an = 'pay_back'; k = 1; } else k = 0; }   // (customer 03's bag take: the reach (and the wait for it) is pay_n_1, then the bag in his hand — the one drawn carry, bag_back 0)
+    if (HER.cN && an === 'bag_back') { if (k === 2 || k === 0) { an = 'pay_back'; k = 1; } else k = 0; }   // (customer 03's bag take: the reach (and the wait for it) is pay_n_1, then the bag in his hand — the one drawn carry, bag_back 0)
     if (w.anim === 'shrug' && has('shrug_front')) { an = 'shrug_front'; k = 0; }
     else if (w.anim === 'admire' && w.dir === 'n' && has('admire_back')) { an = 'admire_back'; k = clamp(w.kf | 0, 0, 1); }
-    if (w.anim === 'wave' && w.dir === 's') { if (!w.prop && has('walk_front')) { const v = bareStand(w); an = v[0]; k = v[1]; } else { an = 'stand_front_bag'; k = 0; } }   // (a poke: she turns to you — the stand facing us, until a wave sheet lands)
+    if (w.anim === 'wave' && w.dir === 's') { if (!w.prop && has('walk_front')) { const v = bareStand(w); an = v[0]; k = v[1]; flip = !!v[2]; blink = an === 'walk_front'; } else { an = 'stand_front_bag'; k = 0; blink = true; } }   // (a poke: she turns to you — the stand facing us, until a wave sheet lands)
     if (!has(an)) an = has('browse_back') ? 'browse_back' : Object.keys(HER.anims)[0];
     const G0 = artOf(w.x, 0, w.z);
-    return { an, key: frameK(an, k), gx: G0[0], gy: G0[1] + hop, walk: false };
+    // THE BLINK CLOCK of a front stand (fix D): closed 7 ticks from the stand's tick 5 (as her drawn blink), then every 1.5-2.5 s, the period hashed per customer
+    const per = 90 + round(60 * hash(w.cid * 13 + 1)), bq = ((bt % per) + per) % per;
+    return { an, key: frameK(an, k), gx: G0[0], gy: G0[1] + hop, walk: false, flip, blink: blink && bq >= 5 && bq < 12 };
   }
   function her(w) {   // LIFE's drawOne, at the art's density: the frame, her place, CAST's state (taps, bubbles)
     useLib(libOf(w)); try { her1(w); } finally { useLib(HER0); }
   }
   function her1(w) {
-    const pk = herPick(w), S = pk.key && HER.F[pk.key]; if (!S) { w.R = null; w.box = null; return; }
-    const gx = round(pk.gx), gy = round(pk.gy), ox = gx - HER.ax, oy = gy - HER.ay, fade = clamp(w.fade, 0, 1);
-    PEOPLE.push({ S, ox, oy, fade, gx, gy, w, key: pk.key });
-    const s = CAST._st(w.drawn, w.inst), R = castR(s, footprint(S, ox, oy, false, 0, null), [gx, gy], 'rh:' + pk.key);
-    w.R = R; w.box = R && R.n ? [R.box[0], R.box[1], R.box[2], R.box[3]] : null; w.O.frame = 'rh:' + pk.key;
+    const pk = herPick(w); let key = pk.key;
+    if (pk.blink && !pk.walk && DBG.blinkHer !== false && key && HER.F[key + '_blink']) key += '_blink';   // (a front stand's closed-eye copy on the blink clock: fix D)
+    const S = key && HER.F[key]; if (!S) { w.R = null; w.box = null; return; }
+    const flip = !!pk.flip, cw = HER.size ? HER.size[0] : S.x0 + S.w;   // (a mirrored sheet is mirrored about its own canvas width: its anchor x mirrors with it)
+    const gx = round(pk.gx), gy = round(pk.gy), ox = flip ? gx - (cw - 1 - HER.ax) : gx - HER.ax, oy = gy - HER.ay, fade = clamp(w.fade, 0, 1);
+    const br = !pk.walk && DBG.breathHer !== false ? breathAt(w, +w.cu.t || 0, key.replace(/_blink$/, '')) : 0;   // (the cell's breath row while her breath is in, else 0: fix D; a blink copy breathes on its open cell's row)
+    PEOPLE.push({ S, ox, oy, fade, gx, gy, w, key, flip, cw, br, lock: pk.lock || '', n: pk.n, step: pk.step });
+    const s = CAST._st(w.drawn, w.inst), R = castR(s, footprint(S, ox, oy, flip, cw, null), [gx, gy], 'rh:' + key + (flip ? ':M' : ''));
+    w.R = R; w.box = R && R.n ? [R.box[0], R.box[1], R.box[2], R.box[3]] : null; w.O.frame = 'rh:' + key;
   }
-  /** this frame's customers into the art, far to near: each one's contact shadow (15 x 4 x 0.76), then her (the room's draw) */
+  // THE CUSTOMERS' BREATH (the motion round, A2's fix D — "wait at the till: a statue; nobody breathes"): every standing customer breathes as he
+  // does (drawKeeper): the rows above her chest row 1 art px up for 40 % of a 3.2-4 s cycle, the cycle and its phase hashed per customer so
+  // no two breathe together; the chest row per CELL by breathRowOf (a cell without a clean seam does not breathe). Walks never breathe (their
+  // cells carry their own bob). REHAUL._dbg.breathHer = false: as before
+  function breathAt(w, t, key) { const T = 3.2 + 0.8 * hash(w.cid * 31 + 5), u = (((t + T * hash(w.cid * 17 + 3)) % T) + T) % T; return u < 0.4 * T ? breathRowOf(HER, key) : 0; }
+  const lum = (c) => ((c & 255) * 0.299 + ((c >>> 8) & 255) * 0.587 + ((c >>> 16) & 255) * 0.114) / 255;   // (a palette colour's luma, 0-1)
+  /** a CELL's breath row — the canvas row the lift stops at (the rows above it rise, row br - 1 is drawn once more in its place), chosen inside a
+   *  FLAT stretch of the torso (the lead's seam gate, 31.10 — a seam on a horizontal edge or an outline row would be a stripe across the back
+   *  every breath): in the chest band, 34-46 % down the cell (his breathRow 56 sits 41 % down his stand), a row whose rows above and below
+   *  differ from it by no more than the band's typical row change (the median row-pair diff) and that carries no LONE dark line — a run of 3
+   *  or more dark px (luma < 0.16) with neither neighbour row dark there, which the duplicate would thicken — the flattest of them. None:
+   *  0, the cell does not breathe. Measured once a cell (L.brK); the gate reads it back as breathSeam */
+  function breathRowOf(L, key) {
+    const C = L.brK || (L.brK = {}); if (C[key] !== undefined) return C[key];
+    const g = breathSeam(L, key); return (C[key] = g && g.br ? g.br : 0);
+  }
+  /** the seam's numbers for a cell: { br, s (the row drawn twice, canvas), du, dd (its diffs with the rows above and below), med (the band's
+   *  median row-pair diff), lone (its longest lone dark run), band, skipped: [row, why] } — or null without the cell */
+  function breathSeam(L, key) {
+    const S = L.F[key]; if (!S) return null;
+    const w = S.w, h = S.h, ix = S.ix, pal = S.pal, dk = Array.from(pal, (c) => lum(c) < 0.16), isD = (v) => v !== 255 && dk[v];
+    const y0 = max(2, round(h * 0.34)), y1 = min(h - 3, round(h * 0.46)); if (y1 < y0) return { br: 0, band: [y0, y1], skipped: 'no band' };
+    const dif = (a, b) => { let d = 0; for (let x = 0; x < w; x++) if (ix[a * w + x] !== ix[b * w + x]) d++; return d; };
+    const lone = (y) => { let run = 0, best = 0; for (let x = 0; x < w; x++) { if (isD(ix[y * w + x]) && !isD(ix[(y - 1) * w + x]) && !isD(ix[(y + 1) * w + x])) { if (++run > best) best = run; } else run = 0; } return best; };
+    const D = []; for (let y = y0; y <= y1 + 1; y++) D.push(dif(y - 1, y)); const med = D.slice().sort((a, b) => a - b)[D.length >> 1];
+    let best = null;
+    for (let y = y0; y <= y1; y++) { const du = dif(y, y - 1), dd = dif(y, y + 1), ln = lone(y); if (du > med || dd > med || ln >= 3) continue; if (!best || du + dd < best.du + best.dd) best = { s: S.y0 + y, du, dd, lone: ln }; }
+    return best ? Object.assign({ br: best.s + 1, med, band: [S.y0 + y0, S.y0 + y1] }, best) : { br: 0, med, band: [S.y0 + y0, S.y0 + y1], skipped: 'no flat row without a lone dark line' };
+  }
+  /** her sprite with the breath in: the rows above br 1 px up, row br - 1 once more in its place, the rest where they are — drawKeeper's row blit at her
+   *  layer (the same hash dissolve as blit, keyed on the row drawn to) */
+  function blitBreath(p) {
+    const S = p.S, br = p.br, ox = p.ox, oy = p.oy, flip = p.flip, cw = p.cw, fade = p.fade, ab = AB, aw = AW, bof = BOF, x0 = PX, xe = XE, y0 = PY, ye = YE, ix = S.ix, pal = S.pal; let n = 0;
+    const row = (sy, dy) => { const Y = oy + sy + dy; if (Y < y0 || Y >= ye) return; const ry = sy - S.y0; if (ry < 0 || ry >= S.h) return; const r = Y * aw - bof, hr = Y * HG, o = ry * S.w;
+      for (let x = 0; x < S.w; x++) { const v = ix[o + x]; if (v === 255) continue; const X = flip ? ox + cw - 1 - (S.x0 + x) : ox + S.x0 + x; if (X < x0 || X >= xe) continue; if (fade < 1 && hash(hr + X) > fade) continue; ab[r + X] = pal[v]; n++; } };
+    for (let sy = S.y0; sy < S.y0 + S.h; sy++) row(sy, sy < br ? -1 : 0);
+    row(br - 1, 0);
+    BLC[BLI.her]++; BLP[BLI.her] += n;
+  }
+  /** this frame's customers into the art, far to near: each one's contact shadow (15 x 4 x 0.76), then her (the room's draw; mirrored where the pick says, breathing where it says) */
   function drawHer() {
     for (const p of PEOPLE) {
       for (let dy = -2; dy <= 1; dy++) for (let dx = -7; dx <= 7; dx++) { if ((dx * dx) / 56.25 + ((dy + 0.5) * (dy + 0.5)) / 4 > 1) continue; const X = p.gx + dx, Y = p.gy + dy; if (!inW(X, Y)) continue; const i = bi(X, Y); AB[i] = mul(AB[i], 0.76); }
-      blit(AB, p.S, p.ox, p.oy, false, 0, p.fade, null, BLI.her);
+      if (p.br) blitBreath(p); else blit(AB, p.S, p.ox, p.oy, p.flip, p.cw, p.fade, null, BLI.her);
     }
   }
 
@@ -26090,10 +26200,11 @@ const RHPEOPLE = (() => {
   // The copies are his frames too, by name (HIM.F['<key>_blink']). REHAUL._dbg.blink3q = false: the three-quarters as before (eyes open)
   let BLINK = {};   // (a three-quarter frame's key → its closed-eye copy; prep)
   const LID = 0x2a2224, SKIN = [0xfcd6b8, 0xf2b490, 0xda9070];   // (the drawn front blink's lid; his skin's three lit steps, PLAN 4.1's hexes)
+  const EP_HIM = { lid: LID, skin: SKIN, def: 0xf2b490, shade: 0xda9070 };   // (his eye rule's colours: the lid, the skin steps, the fill = the base skin, or the shade where it rules the ring; a cast's: its own skin list, the ink lid, the fill = the ring's commonest skin — blinkCast)
   const N4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
   const rgbOf = (c) => ((c & 255) << 16) | (((c >>> 8) & 255) << 8) | ((c >>> 16) & 255);   // (a frame's rgba32 → 0xRRGGBB)
   /** a frame's eyes: the INK blobs inside the face on the canvas rows r0 … r1 → [{ px: [local index], x0, x1, y0, y1 }] */
-  function eyesOf(S, r0, r1) {
+  function eyesOf(S, r0, r1, sz = [3, 16]) {   // (sz: the blob sizes taken — the rule's 3-16 px; eyePair also asks for the BIG ones, 17-120, to know an eye too big for it)
     const w = S.w, h = S.h, ix = S.ix, pal = S.pal, ink = (v) => v !== 255 && rgbOf(pal[v]) === 0x1b1416, inRow = (y) => y + S.y0 >= r0 && y + S.y0 <= r1;
     const seen = new Uint8Array(w * h), out = [];
     for (let y = max(0, r0 - S.y0); y <= min(h - 1, r1 - S.y0); y++) for (let x = 0; x < w; x++) {
@@ -26102,22 +26213,22 @@ const RHPEOPLE = (() => {
       while (st.length) { const j = st.pop(), jx = j % w, jy = (j / w) | 0; px.push(j);
         for (const [dx, dy] of N4) { const X = jx + dx, Y = jy + dy; if (X < 0 || Y < 0 || X >= w || Y >= h) { rim = true; continue; } const q = Y * w + X;
           if (ix[q] === 255) { rim = true; continue; } if (ink(ix[q]) && !seen[q]) { if (!inRow(Y)) { rim = true; continue; } seen[q] = 1; st.push(q); } } }
-      if (rim || px.length < 3 || px.length > 16) continue;
+      if (rim || px.length < sz[0] || px.length > sz[1]) continue;
       let x0 = w, x1 = -1, y0 = h, y1 = -1; for (const j of px) { const jx = j % w, jy = (j / w) | 0; if (jx < x0) x0 = jx; if (jx > x1) x1 = jx; if (jy < y0) y0 = jy; if (jy > y1) y1 = jy; }
-      if (x1 - x0 < 5 && y1 - y0 < 5) out.push({ px, x0, x1, y0, y1 });
+      if (sz[1] > 16 || (x1 - x0 < 5 && y1 - y0 < 5)) out.push({ px, x0, x1, y0, y1 });
     }
     return out;
   }
   /** the frame with its eyes closed (the rule above) → a copy of it (the same 1-byte frame, its own ix), or null */
-  function closedEyes(S, eyes) {
+  function closedEyes(S, eyes, EP = EP_HIM) {
     const w = S.w, h = S.h, ix = S.ix, pal = S.pal, idx = (c) => { for (let v = 0; v < pal.length; v++) if (rgbOf(pal[v]) === c) return v; return -1; };
-    const lid = idx(LID), sk = SKIN.map(idx), skDef = idx(0xf2b490), skShade = idx(0xda9070); if (lid < 0 || skDef < 0) return null;
+    const lid = idx(EP.lid), sk = EP.skin.map(idx), skDef = EP.def !== null ? idx(EP.def) : sk.find((v) => v >= 0), skShade = EP.shade !== null ? idx(EP.shade) : -1; if (lid < 0 || !(skDef >= 0)) return null;
     const o = ix.slice(), isSkin = (v) => v !== 255 && sk.includes(v);
     for (const e of eyes) {
       const mine = new Set(e.px), n = new Map();
       for (const j of e.px) { const jx = j % w, jy = (j / w) | 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const X = jx + dx, Y = jy + dy; if (X < 0 || Y < 0 || X >= w || Y >= h) continue; const q = Y * w + X; if (!mine.has(q) && isSkin(ix[q])) n.set(ix[q], (n.get(ix[q]) || 0) + 1); } }
       let top = -1, best = 0; for (const v of sk) if (v >= 0 && (n.get(v) || 0) > best) { best = n.get(v); top = v; }
-      const fill = top === skShade && skShade >= 0 ? skShade : skDef;   // (the base skin, as the drawn blink; the shade step where it rules the ring)
+      const fill = EP.def === null ? (top >= 0 ? top : skDef) : top === skShade && skShade >= 0 ? skShade : skDef;   // (his: the base skin, as the drawn blink; the shade step where it rules the ring. A cast: the ring's commonest skin)
       for (const j of e.px) o[j] = fill;
       const low = new Map(); for (const j of e.px) { const jx = j % w, jy = (j / w) | 0; if (!low.has(jx) || jy > low.get(jx)) low.set(jx, jy); }   // (each column's lowest px: the lid)
       for (const [jx, jy] of low) o[jy * w + jx] = lid;
@@ -26125,6 +26236,29 @@ const RHPEOPLE = (() => {
       for (const [X, Y] of [[cl - 1, low.get(cl) - 1], [cr + 1, low.get(cr) - 1]]) if (X >= 0 && X < w && Y >= 0 && Y < h && !mine.has(Y * w + X) && isSkin(ix[Y * w + X])) o[Y * w + X] = lid;
     }
     const B = Object.create(Object.getPrototypeOf(S)); Object.assign(B, S); B.ix = o; B._px = null; return B;
+  }
+  /** THE EYE PAIR of a frame without a drawn blink to take the eye rows from (the motion round): the ink blobs of the rule above on the canvas rows
+   *  r0 … r1 (the head band), each ringed >= 25 % by EP's skin, 2 rows or taller and no taller than wide + 2 (a 1-row line is a lid or a rim, a
+   *  tall sliver a rim's side), whole (no other such blob within a px: a split eye), paired — the same rows (overlapping, within a row), 3-24 px
+   *  apart, sizes within 3 x of each other, nothing of the kind between them, the pair CENTRED on the face (its midpoint within 6 px of the
+   *  silhouette's middle at its rows: a rim and the bridge of a pair of glasses sit to one side), and no big skin-ringed ink blob (17-120 px:
+   *  an eye too big for the rule, as customer 06's) within 6 rows of it — the best pair by skin ring, likeness and level; → [left, right]
+   *  (eyesOf's shape) or null: the frame keeps its eyes open. Each condition names a miss read at 12 x on the casts' copies (31.10): a rim +
+   *  the bridge, two cheek dots under big eyes, the eyebrows over big eyes, a 1-px lid line, a sideburn + the nose, a split eye, a collar */
+  function eyePair(S, EP, r0, r1) {
+    const w = S.w, h = S.h, ix = S.ix, pal = S.pal, sk = new Set(EP.skin.map((c) => { for (let v = 0; v < pal.length; v++) if (rgbOf(pal[v]) === c) return v; return -1; }).filter((v) => v >= 0));
+    const ring = (e) => { const mine = new Set(e.px); let n = 0, s = 0; for (const j of e.px) { const jx = j % w, jy = (j / w) | 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const X = jx + dx, Y = jy + dy; if (X < 0 || Y < 0 || X >= w || Y >= h) continue; const q = Y * w + X; if (mine.has(q) || ix[q] === 255) continue; n++; if (sk.has(ix[q])) s++; } } e.skin = n ? s / n : 0; return e; };
+    const big = eyesOf(S, r0, r1, [17, 120]).map(ring).filter((e) => e.skin >= 0.25), all = eyesOf(S, r0, r1).map(ring).filter((e) => e.skin >= 0.25);
+    const near = (a, b, d) => a.x0 <= b.x1 + d && b.x0 <= a.x1 + d && a.y0 <= b.y1 + d && b.y0 <= a.y1 + d;
+    const B = all.filter((e) => e.y1 > e.y0 && e.y1 - e.y0 <= e.x1 - e.x0 + 2 && !all.some((o) => o !== e && o.px.length * 2 >= e.px.length && near(o, e, 1)));   // (a split eye: a piece of its own size beside it; a 3-px shadow under a 10-px eye is not one)
+    const mid = (y0, y1) => { let a = w, b = -1; for (let y = y0; y <= y1; y++) for (let x = 0; x < w; x++) if (ix[y * w + x] !== 255) { if (x < a) a = x; if (x > b) b = x; } return b < 0 ? -1 : (a + b) / 2; };
+    let best = null, bs = -1;
+    for (let i = 0; i < B.length; i++) for (let j = i + 1; j < B.length; j++) { const a = B[i], b = B[j], L = a.x0 < b.x0 ? a : b, R = L === a ? b : a, gap = R.x0 - L.x1 - 1; if (gap < 3 || gap > 24 || a.y1 < b.y0 - 1 || b.y1 < a.y0 - 1) continue; const ra = a.px.length / b.px.length; if (ra > 3 || ra < 1 / 3) continue;
+      const y0 = min(a.y0, b.y0), y1 = max(a.y1, b.y1); if (all.some((o) => o !== a && o !== b && o.x0 > L.x1 && o.x1 < R.x0 && o.y0 <= y1 && o.y1 >= y0)) continue;   // (a third one between them)
+      if (big.some((o) => o.y0 <= y1 + 6 && o.y1 >= y0 - 6)) continue;   // (an eye too big for the rule beside them: these are its brows, or dots under it)
+      const m = mid(y0, y1); if (m < 0 || abs((L.x0 + R.x1) / 2 - m) > 6) continue;
+      const sc = min(a.skin, b.skin) * 2 + min(a.px.length, b.px.length) / max(a.px.length, b.px.length) - abs(a.y0 - b.y0) * 0.2; if (sc > bs) { bs = sc; best = [L, R]; } }
+    return best;
   }
   /** at the prep: every three-quarter frame's closed-eye copy, on the drawn front blink's eye rows; → the check's numbers */
   let BLINKI = null;   // (what the prep found: the eye rows, the front's self-test, each frame's eyes — REHAUL._p.people.blinkInfo())
@@ -26145,6 +26279,13 @@ const RHPEOPLE = (() => {
       BLINK[sk] = closedEyes(S, E); BLINKI.frames[sk] = { eyes: E.length, at: s0 };
       for (const k of more) { const S2 = HIM.F[k]; if (!S2) continue; const E2 = eyesOf(S2, r0, r1), ok = sig(S2, E2) === s0; BLINKI.frames[k] = { eyes: E2.length, same: ok }; if (ok) BLINK[k] = closedEyes(S2, E2); }
     }
+    // HIS BLINK IN EVERY STANDING CELL (the motion round, A2's fix D: "walks, look_case, the glasses push and every counter idle have no closed-eye copy,
+    // so blinks that fall there vanish" — 2 blinks landed in 16.7 s): look_case, glasses and the counter idles get their copies too, their eyes found
+    // as the PAIR in the head band (eyePair: the look down and the idles move his eyes off the stand's rows), closed by the same rule. A cell whose pair
+    // is not found keeps its eyes open (the mug at his mouth, the goggles on, the yawn, the paint). REHAUL._dbg.blinkAll = false: the three-quarters only
+    if (DBG.blinkAll !== false) for (const k in HIM.F) { if (BLINK[k] !== undefined || !/^(look_case|glasses|idle_)/.test(k) || /_blink$/.test(k)) continue; const S = HIM.F[k]; if (!S) continue;
+      const pr = eyePair(S, EP_HIM, S.y0, ((HIM.meta[k] && HIM.meta[k].headBot) || 43) + 1); if (!pr) { BLINKI.frames[k] = { eyes: 0 }; continue; }
+      const C = closedEyes(S, pr); if (C) { BLINK[k] = C; BLINKI.frames[k] = { eyes: 2, pair: true, rows: [min(pr[0].y0, pr[1].y0) + S.y0 - 1, max(pr[0].y1, pr[1].y1) + S.y0] }; } }   // (rows: the copy's own eye rows, the lid's arc one above — the check reads them)
     for (const k in BLINK) if (BLINK[k]) HIM.F[k + '_blink'] = BLINK[k]; else delete BLINK[k];   // (by name too, as the stand-in's front_blink: every check that looks a drawn frame up finds it)
   }
   // HIS EYES ON HER IN A VISIT WITHOUT A HELLO (W1 E1.3 item 2; judge/MVP_GATE_B.md fix 5): OWNER idles or hums at home while she browses
@@ -26210,10 +26351,26 @@ const RHPEOPLE = (() => {
     const a = S0.act;
     if (a && a.mv && a.pts && a.pts.length > 1 && a.len > 0.01) {
       const d0 = spotDx(a.pts[0]), d1 = spotDx(a.pts[a.pts.length - 1]); if (!d0 && !d1) return 0;
-      const st = a.step > 0 ? a.step : 0, dq = a.dq !== undefined ? a.dq : a.d >= a.len - 1e-6 || !st ? a.d : floor(a.d / st + 1e-9) * st, u = clamp((+dq || 0) / a.len, 0, 1);
+      const dq = hisDist(a), u = clamp((+dq || 0) / a.len, 0, 1);
       return d0 * (1 - u) + d1 * u;
     }
     return spotDx([S0.x, S0.z]);
+  }
+  // HIS COUNTER WALKS' GLIDE (the motion round, A2's fix A on him): OWNER steps his drawn root a frame's stride at a time (72_owner.js advance: S.rx at
+  // a.dq — 5-8 px every 3-4 ticks, the smoothest mover in the game but still a hop). Under the glide he is drawn along the walk at hisDist: 'b' his TRUE
+  // place (a.d: S.x, S.z), 'a' the root eased over the last glideF of each stride toward the next step; the till offset rides the same distance, so it
+  // never creeps against his root (MVP_GATE_A fix 6). REHAUL._dbg.keeperGlide = false (or no glide): his root as before
+  function hisDist(a) {
+    const st = a.step > 0 ? a.step : 0, dq = a.dq !== undefined ? a.dq : a.d >= a.len - 1e-6 || !st ? a.d : floor(a.d / st + 1e-9) * st;
+    if (!DBG.glide || DBG.keeperGlide === false || !st) return dq;
+    if (DBG.glide === 'b') return a.d;
+    const F_ = clamp(+DBG.glideF || 0.6, 0.2, 1), u = clamp((a.d - dq) / st, 0, 1); return u >= 1 - F_ ? min(a.d, dq + (u - (1 - F_)) / F_ * st) : dq;
+  }
+  /** where he is drawn (art px): his root, or along a walk the place hisDist names — on his straight lane the true place is root + (the stride's share) */
+  function hisPlace(S0) {
+    const a = S0.act; if (!(a && a.mv && a.len > 0.01 && DBG.glide && DBG.keeperGlide !== false)) return artOf(S0.rx, 0, S0.rz);
+    const dq = a.dq !== undefined ? a.dq : a.d, dd = hisDist(a), k = a.d - dq > 1e-6 ? clamp((dd - dq) / (a.d - dq), 0, 1) : 0;
+    return artOf(S0.rx + (S0.x - S0.rx) * k, 0, S0.rz + (S0.z - S0.rz) * k);
   }
   // HIS GOODBYE WAVE TO HER after the sale (MVP_GATE_B fix 2 = PLAN 1.1 item 3: K6 wave_r, "his goodbye at the till", was drawn and never
   // played — OWNER's served sale ends with the ♥ and the bounce). Under the switch OWNER (72_owner.js svTick) then waits at the till,
@@ -26350,14 +26507,14 @@ const RHPEOPLE = (() => {
     const S0 = OWNER._S; if (!S0.drawn) { S0.box = null; return; }
     const Z = R.RM.zoom, kz = Z ? EASE.inOutCubic(clamp(Z.t / 0.34, 0, 1)) : 0, fadeZ = Z ? clamp((2.44 - (1 + 1.8 * kz)) / 1.08, 0, 1) : 1;   // (OWNER's own fadeNow: he dissolves under the zoom)
     S0.fade = fadeZ; const fade = fadeZ * (S0.appear === undefined ? 1 : S0.appear), t = TIME;
-    const G0 = artOf(S0.rx, 0, S0.rz), gx = round(G0[0] + tillOff(S0)), gy = floor(G0[1]) + 1;
+    const G0 = hisPlace(S0), gx = round(G0[0] + tillOff(S0)), gy = floor(G0[1]) + 1;
     const want = keeperView(S0, G0[0], t); if (want !== KS.view) { KS.prev = KS.view; KS.view = want; KS.turnT = t; }
     const turning = t - KS.turnT < (DBG.headLead || 0);   // (the whole figure turns in one frame: the 0.12 s head-first lead read as a sync glitch, Alex 28.10; REHAUL._dbg.headLead = 0.12 brings it back)
     if (t >= KS.nextBlink) { KS.blinkT = t; KS.bn++; KS.nextBlink = t + (hash(KS.bn * 7 + 3) < 0.15 ? 0.3 : 2.5 + 3.5 * hash(KS.bn * 11 + 5)); }
     const blink = t - KS.blinkT < 0.12;
     const BK = laneFrame(S0, t) || (laneOn() ? null : backFrame(S0));   // (R2k: the counter action; slice 7's back lane only with keeperLeaves)
     const frameOf = (v) => {
-      if (BK && HIM.F[BK.key]) return { S: HIM.F[BK.key], m: HIM.meta[BK.key] || {}, flip: false, name: BK.key };
+      if (BK && HIM.F[BK.key]) { const C = blink && DBG.blinkAll !== false && BLINK[BK.key]; return { S: C || HIM.F[BK.key], m: HIM.meta[BK.key] || {}, flip: false, name: BK.key + (C ? '_blink' : '') }; }   // (a counter idle's blink: its copy, fix D)
       if (SHEETS) {   // his pose sheets (PLAN 4.3: K2 stand — 0 front, 1 its closed eyes, 2 three-quarter to screen-left, 3 to screen-right; K3 glasses, K4 look_case, K5 wave_l, K6 wave_r, K7 walk_r, K8 walk_l)
         let an = 'stand', k = v === 'L' ? 2 : v === 'R' ? 3 : blink ? 1 : 0;
         const a = S0.anim, ph = S0.k | 0;
@@ -26372,7 +26529,7 @@ const RHPEOPLE = (() => {
         else if (a === 'admire' && HIM.anims.look_case && !(v !== 'F' && toHer(S0)) && !admSide(S0)) { an = 'look_case'; const sv = OWNER.serving ? OWNER.serving() : null, sp = sv ? sv.phase : '', at = S0.act && S0.act.pose ? +S0.act.t || 0 : 0; k = min(sp === 'show' ? 2 : sp === 'pick' ? (at < 0.15 ? 0 : 1) : 0, HIM.anims.look_case.length - 1); }
         else if (a === 'wave' && HIM.anims[v === 'R' ? 'wave_r' : 'wave_l']) { an = v === 'R' ? 'wave_r' : 'wave_l'; k = ph; }
         const L = HIM.anims[an] || HIM.anims.stand, key = L[((k % L.length) + L.length) % L.length];
-        if (blink && v !== 'F' && DBG.blink3q !== false && BLINK[key]) return { S: BLINK[key], m: HIM.meta[key] || {}, flip: false, name: key + '_blink' };   // (his three-quarter blink: item 1)
+        if (blink && BLINK[key] && (v !== 'F' ? DBG.blink3q !== false : DBG.blinkAll !== false)) return { S: BLINK[key], m: HIM.meta[key] || {}, flip: false, name: key + '_blink' };   // (his three-quarter blink: item 1; the front's look_case and glasses: fix D)
         return { S: HIM.F[key], m: HIM.meta[key] || {}, flip: false, name: key };
       }
       const base = v === 'F' ? 'front' : 'threequarter', b = blink && HIM.F[base + '_blink'] ? base + '_blink' : base; return { S: HIM.F[b] || HIM.F[base], m: HIM.meta[base] || {}, flip: v === 'R', name: b };   // (THE STAND-IN: the three-quarter mirrored for screen-right)
@@ -26386,7 +26543,7 @@ const RHPEOPLE = (() => {
     // 2 px on it his head dropped 3 and rose 4 at every look into THE GLASS CASE), and K7 / K8 carry their own 1-row bob after each heel
     // strike (the code bob on frames 1 and 4 cancelled it)
     const breath = ((t + 1.3) % 3.6) < 1.4 ? 1 : 0, nod = S0.anim === 'admire' && toHer(S0) && KS.view !== 'F' ? nodAt(S0) : S0.anim === 'admire' && !(SHEETS && HIM.anims.look_case) ? 2 : 0, mv = !!(S0.act && S0.act.mv), bob = mv && !(SHEETS && HIM.anims.walk_r) && (S0.k % 6 === 2 || S0.k % 6 === 3) ? 1 : 0;
-    KEEP = { body, head, ox: gx - HIM.ax, oy: gy - HIM.ay - (BK ? 0 : bob), fade, breath: BK && (BK.still || S0.anim === 'walk' || S0.anim === 'hurry') ? 0 : breath, nod: BK ? 0 : nod, cw: (HIM.F.front || body.S).w };
+    KEEP = { body, head, ox: gx - HIM.ax, oy: gy - HIM.ay - (BK ? 0 : bob), fade, breath: BK ? (BK.still && DBG.blinkAll !== false ? breath : 0) : breath, nod: BK ? 0 : nod, cw: (HIM.F.front || body.S).w };   // (his breath runs on through the counter idles — fix D; never through the back lane's walks)
     // his taps (CAST.hit: his pixels above THE COUNTER's back edge), his sid's pieces-of-the-room (RM.own), his emote (CAST.emoteAt)
     const n = footprint(body.S, KEEP.ox, KEEP.oy, body.flip, KEEP.cw, EROW);
     const s = CAST._st(S0.drawn), Rr = castR(s, n, [gx, gy], 'rh:' + head.name + (head.flip ? ':R' : ''));
@@ -26412,7 +26569,7 @@ const RHPEOPLE = (() => {
   function hook() { if (HOOKED) return; HOOKED = true; const D0 = OWNER.draw; OWNER.draw = function () { if (RH.uncovered({ screen: 'room' }) || !RHROOM.live()) return D0.apply(this, arguments); const t0 = pnow();   // (W3f: the coverage fallback — a room theme, the female shopkeeper: OWNER's own draw, whole)
      try { keeper(); } catch (e) { fail('him', e); } CUR[CK.him] += pnow() - t0; }; }
   /** this frame's people as drawn (st().last) */
-  const last = (t) => ({ t, people: PEOPLE.map((p) => ({ cid: p.w.cid, key: p.key, gx: p.gx, gy: p.gy, beat: p.w.beat, anim: p.w.anim, fade: p.fade })), keeper: KEEP ? { view: KS.view, body: KEEP.body.name, head: KEEP.head.name, flip: KEEP.head.flip, ox: KEEP.ox, oy: KEEP.oy, breath: KEEP.breath, nod: KEEP.nod, anim: OWNER._S.anim, k: OWNER._S.k, mode: OWNER._S.mode } : null });
+  const last = (t) => ({ t, people: PEOPLE.map((p) => ({ cid: p.w.cid, key: p.key, gx: p.gx, gy: p.gy, beat: p.w.beat, anim: p.w.anim, fade: p.fade, flip: !!p.flip, br: p.br || 0, lock: p.lock || '', n: p.n, step: p.step })), keeper: KEEP ? { view: KS.view, body: KEEP.body.name, head: KEEP.head.name, flip: KEEP.head.flip, ox: KEEP.ox, oy: KEEP.oy, breath: KEEP.breath, nod: KEEP.nod, anim: OWNER._S.anim, k: OWNER._S.k, mode: OWNER._S.mode } : null });
 
   // ---- the record (the room's prep: their libraries, 1 byte a px + their palette, a slice every 8 frames) and the cover (the room's rebuild)
   function* prep(A_, P) {
@@ -26443,7 +26600,9 @@ const RHPEOPLE = (() => {
   }
   const API = { on: true, prep, win, hook, begin() { PEOPLE.length = 0; KEEP = null; }, her, drawHer, keeper, drawKeeper, keep: () => KEEP, last, waveBackT, byeWave, KS, ADM_SIDE,
     blinkInfo: () => BLINKI, play: (n) => { if (!laneOn() || !IDLE[n]) return false; lnStart(n, TIME, 0); return true; }, lane: () => ({ name: LN.name, end: LN.end, next: LN.next, last: LN.last }),   // (R2k: the test hooks — the idle montage and the checks)
-     castBody, ownBody, castFiles, pickHim, get HER() { return HER; }, get HIM() { return HIM; } };
+     castBody, ownBody, castFiles, pickHim, get HER() { return HER; }, get HIM() { return HIM; },
+     libs: () => ({ her: HER0, kid: KID, c03: C03, c04: C04, c05: C05, c06: C06, c07: C07, c09: C09, c10: C10 }), breathRowOf, breathSeam, eyePair   // (the motion round's checks: the casts' libraries as prepared — their blink copies and breath rows)
+  };
   RHROOM.usePeople(API); REHAUL._p.people = API;
   return API;
 })();
